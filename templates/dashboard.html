@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PropertyEdge - Dashboard</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <header>
+        <h1>PropertyEdge Dashboard</h1>
+        <nav>
+            <a href="/">Dashboard</a>
+            <a href="/analysis">Analysis</a>
+        </nav>
+    </header>
+    
+    <main>
+        <section class="dashboard-content">
+            <h2>Welcome to PropertyEdge</h2>
+            <p>Your property analysis platform</p>
+        </section>
+    </main>
+    
+    <script src="{{ url_for('static', filename='app.js') }}"></script>
+</body>
+</html>
