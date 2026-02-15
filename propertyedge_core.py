@@ -92,13 +92,40 @@ def fetch_rightmove_html(url: str, timeout: int = 20) -> str:
             "AppleWebKit/537.36 (KHTML, like Gecko) "
             "Chrome/120.0.0.0 Safari/537.36"
         ),
-        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8",
         "Accept-Language": "en-GB,en;q=0.9",
-        "Accept-Encoding": "gzip, deflate, br",
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        "Connection": "keep-alive",
     }
-    r = requests.get(url, headers=headers, timeout=timeout)
+    r = requests.get(url, headers=headers, timeout=timeout, allow_redirects=True)
     r.raise_for_status()
-    return r.text
+    html = r.text or ""
+
+    # Common bot/blocked pages (Rightmove / CDN / WAF)
+    block_signals = [
+        "Pardon Our Interruption",
+        "Access Denied",
+        "Robot Check",
+        "unusual traffic",
+        "blocked",
+        "captcha",
+        "distil",
+        "akamai",
+        "cloudflare",
+    ]
+    if any(sig.lower() in html.lower() for sig in block_signals):
+        title = ""
+        try:
+            soup = BeautifulSoup(html, "lxml")
+            title = (soup.title.get_text(strip=True) if soup.title else "")
+        except Exception:
+            pass
+        raise RuntimeError(
+            "Rightmove blocked this server request (likely Codespaces/datacenter IP). "
+            f"Page title was: '{title}'. "
+            "Run the app locally (home IP) or enable Playwright mode."
+        )
+
+    return html
 
 
 def find_json_objects(text: str) -> List[Dict[str, Any]]:
@@ -179,6 +206,16 @@ def parse_listing(url: str) -> ListingFacts:
 
     facts = ListingFacts(url=url, property_id=pid, key_features=[])
 
+    def get_offer_price(item):
+        """Helper to extract price from offers field which can be dict or list"""
+        offers = item.get("offers")
+        if isinstance(offers, dict):
+            return offers.get("price")
+        if isinstance(offers, list) and offers:
+            if isinstance(offers[0], dict):
+                return offers[0].get("price")
+        return None
+
     # Try to extract PAGE_MODEL (new Rightmove structure)
     page_model = extract_page_model(soup)
     
@@ -241,7 +278,8 @@ def parse_listing(url: str) -> ListingFacts:
                     continue
                 data = json.loads(raw)
                 if isinstance(data, dict):
-                    price = deep_get(data, ["offers", "price"])
+                    # Use robust price extraction
+                    price = get_offer_price(data)
                     if facts.price is None and price is not None:
                         facts.price = money_int(price)
                     
@@ -262,6 +300,12 @@ def parse_listing(url: str) -> ListingFacts:
             price_tag = soup.select_one('[data-testid="price"]') or soup.select_one(".property-header-price")
             if price_tag:
                 facts.price = money_int(price_tag.get_text(" ", strip=True))
+        
+        # Last-resort price regex
+        if facts.price is None:
+            m = re.search(r"£\s*([\d,]{4,})", soup.get_text(" ", strip=True))
+            if m:
+                facts.price = money_int(m.group(1))
 
     print(f"[DEBUG] Extracted facts: price={facts.price}, beds={facts.bedrooms}, postcode={facts.postcode}")
     return facts
@@ -401,6 +445,13 @@ def render_markdown(facts: ListingFacts, comps: List[Comp], valuation: Dict[str,
 
 def run_propertyedge(url: str, ppd_sqlite_path: Optional[str]) -> Dict[str, Any]:
     facts = parse_listing(url)
+    
+    # Fail fast if critical facts are missing
+    if facts.price is None and facts.postcode is None:
+        raise RuntimeError(
+            "Could not extract listing facts (price/postcode missing). "
+            "This is usually a Rightmove block or a page-structure change."
+        )
 
     comps: List[Comp] = []
     if ppd_sqlite_path:
