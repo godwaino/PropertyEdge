@@ -100,19 +100,17 @@ def fetch_rightmove_html(url: str, timeout: int = 20) -> str:
     r.raise_for_status()
     html = r.text or ""
 
-    # Common bot/blocked pages (Rightmove / CDN / WAF)
-    block_signals = [
+    # Only check for severe block signals (not just any mention)
+    severe_block_signals = [
         "Pardon Our Interruption",
         "Access Denied",
         "Robot Check",
         "unusual traffic",
-        "blocked",
         "captcha",
-        "distil",
-        "akamai",
-        "cloudflare",
     ]
-    if any(sig.lower() in html.lower() for sig in block_signals):
+    
+    # Check if page is mostly just a block message (less than 5000 chars)
+    if len(html) < 5000 and any(sig.lower() in html.lower() for sig in severe_block_signals):
         title = ""
         try:
             soup = BeautifulSoup(html, "lxml")
@@ -301,13 +299,31 @@ def parse_listing(url: str) -> ListingFacts:
             if price_tag:
                 facts.price = money_int(price_tag.get_text(" ", strip=True))
         
-        # Last-resort price regex
+        # Last-resort: extract from page title if it contains price info
         if facts.price is None:
-            m = re.search(r"£\s*([\d,]{4,})", soup.get_text(" ", strip=True))
+            try:
+                title = soup.title.get_text(strip=True) if soup.title else ""
+                # Try to extract bedroom count from title if missing
+                if facts.bedrooms is None:
+                    bed_match = re.search(r'(\d+)\s+bedroom', title, re.I)
+                    if bed_match:
+                        facts.bedrooms = safe_int(bed_match.group(1))
+                # Try to extract address from title
+                if facts.address is None and "for sale" in title.lower():
+                    # Title format: "2 bedroom apartment for sale in Address, Postcode"
+                    addr_match = re.search(r'for sale in (.+?)(?:\s*-\s*Rightmove)?$', title, re.I)
+                    if addr_match:
+                        facts.address = addr_match.group(1).strip()
+            except Exception:
+                pass
+        
+        # Last-resort price regex in page text
+        if facts.price is None:
+            m = re.search(r"£\s*([\d,]{5,})", soup.get_text(" ", strip=True))
             if m:
                 facts.price = money_int(m.group(1))
 
-    print(f"[DEBUG] Extracted facts: price={facts.price}, beds={facts.bedrooms}, postcode={facts.postcode}")
+    print(f"[DEBUG] Extracted facts: price={facts.price}, beds={facts.bedrooms}, address={facts.address}, postcode={facts.postcode}")
     return facts
 
 
@@ -447,10 +463,11 @@ def run_propertyedge(url: str, ppd_sqlite_path: Optional[str]) -> Dict[str, Any]
     facts = parse_listing(url)
     
     # Fail fast if critical facts are missing
-    if facts.price is None and facts.postcode is None:
+    if facts.price is None and facts.postcode is None and facts.address is None:
         raise RuntimeError(
-            "Could not extract listing facts (price/postcode missing). "
-            "This is usually a Rightmove block or a page-structure change."
+            "Could not extract listing facts (price/postcode/address all missing). "
+            "This is usually a Rightmove block or a page-structure change. "
+            "Try running locally from a residential IP address."
         )
 
     comps: List[Comp] = []
