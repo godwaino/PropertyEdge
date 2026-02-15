@@ -92,38 +92,52 @@ def fetch_rightmove_html(url: str, timeout: int = 20) -> str:
             "AppleWebKit/537.36 (KHTML, like Gecko) "
             "Chrome/120.0.0.0 Safari/537.36"
         ),
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8",
         "Accept-Language": "en-GB,en;q=0.9",
+        "Accept-Encoding": "gzip, deflate, br",
     }
     r = requests.get(url, headers=headers, timeout=timeout)
     r.raise_for_status()
     return r.text
 
 
-def extract_json_ld(soup: BeautifulSoup) -> List[Dict[str, Any]]:
-    out: List[Dict[str, Any]] = []
-    for tag in soup.find_all("script", attrs={"type": "application/ld+json"}):
+def find_json_objects(text: str) -> List[Dict[str, Any]]:
+    """Find JSON objects in text"""
+    decoder = json.JSONDecoder()
+    results = []
+    pos = 0
+    while True:
+        match = text.find("{", pos)
+        if match == -1:
+            break
         try:
-            raw = tag.get_text(strip=True)
-            if not raw:
-                continue
-            data = json.loads(raw)
-            if isinstance(data, list):
-                out.extend([d for d in data if isinstance(d, dict)])
-            elif isinstance(data, dict):
-                out.append(data)
-        except Exception:
-            continue
-    return out
+            result, index = decoder.raw_decode(text[match:])
+            results.append(result)
+            pos = match + index
+        except ValueError:
+            pos = match + 1
+    return results
 
 
-def extract_next_data(soup: BeautifulSoup) -> Optional[Dict[str, Any]]:
-    tag = soup.find("script", id="__NEXT_DATA__")
-    if not tag:
-        return None
-    try:
-        return json.loads(tag.get_text(strip=True))
-    except Exception:
-        return None
+def extract_page_model(soup: BeautifulSoup) -> Optional[Dict[str, Any]]:
+    """Extract PAGE_MODEL JavaScript variable from Rightmove page"""
+    scripts = soup.find_all("script")
+    for script in scripts:
+        script_text = script.string
+        if script_text and "PAGE_MODEL" in script_text:
+            # Find the PAGE_MODEL assignment
+            match = re.search(r'PAGE_MODEL\s*=\s*(\{.*?\});?\s*(?:window|</script>|$)', script_text, re.DOTALL)
+            if match:
+                try:
+                    json_str = match.group(1)
+                    data = json.loads(json_str)
+                    return data
+                except json.JSONDecodeError:
+                    # Try finding JSON objects in the text
+                    json_objects = find_json_objects(script_text)
+                    if json_objects:
+                        return json_objects[0]
+    return None
 
 
 def deep_get(d: Any, path: List[Any]) -> Any:
@@ -144,6 +158,20 @@ def deep_get(d: Any, path: List[Any]) -> Any:
     return cur
 
 
+def safe_int(x: Any) -> Optional[int]:
+    try:
+        return int(x)
+    except Exception:
+        return None
+
+
+def safe_float(x: Any) -> Optional[float]:
+    try:
+        return float(x)
+    except Exception:
+        return None
+
+
 def parse_listing(url: str) -> ListingFacts:
     pid = parse_property_id(url)
     html = fetch_rightmove_html(url)
@@ -151,90 +179,92 @@ def parse_listing(url: str) -> ListingFacts:
 
     facts = ListingFacts(url=url, property_id=pid, key_features=[])
 
-    # JSON-LD (often includes price + address)
-    for item in extract_json_ld(soup):
-        price = deep_get(item, ["offers", "price"])
-        if facts.price is None and price is not None:
-            facts.price = money_int(price)
+    # Try to extract PAGE_MODEL (new Rightmove structure)
+    page_model = extract_page_model(soup)
+    
+    if page_model:
+        print(f"[DEBUG] Found PAGE_MODEL data")
+        # Extract propertyData from PAGE_MODEL
+        prop_data = deep_get(page_model, ["propertyData"]) or page_model
+        
+        if isinstance(prop_data, dict):
+            # Price
+            price_data = prop_data.get("prices") or prop_data.get("price") or {}
+            if isinstance(price_data, dict):
+                facts.price = money_int(price_data.get("primaryPrice") or price_data.get("displayPrice"))
+            elif isinstance(price_data, (int, str)):
+                facts.price = money_int(price_data)
+            
+            # Address
+            address_data = prop_data.get("address") or {}
+            if isinstance(address_data, dict):
+                facts.address = address_data.get("displayAddress")
+                facts.postcode = address_data.get("outcode")  # or 'deliveryPointId'
+            
+            # Bedrooms/Bathrooms
+            facts.bedrooms = safe_int(prop_data.get("bedrooms"))
+            facts.bathrooms = safe_int(prop_data.get("bathrooms"))
+            
+            # Property type
+            facts.property_type = prop_data.get("propertySubType") or prop_data.get("propertyType")
+            
+            # Tenure
+            facts.tenure = prop_data.get("tenure") or prop_data.get("tenureType")
+            
+            # Floor area
+            size_data = prop_data.get("sizings") or []
+            if isinstance(size_data, list) and len(size_data) > 0:
+                first_size = size_data[0]
+                if isinstance(first_size, dict):
+                    facts.floor_area_sqft = safe_float(first_size.get("maximumSize"))
+                    if facts.floor_area_sqft:
+                        facts.floor_area_sqm = round(sqft_to_sqm(facts.floor_area_sqft), 2)
+            
+            # EPC
+            epc_data = prop_data.get("epc") or {}
+            if isinstance(epc_data, dict):
+                facts.epc_rating = epc_data.get("currentRating") or epc_data.get("rating")
+            
+            # Key features
+            features = prop_data.get("keyFeatures") or prop_data.get("features") or []
+            if isinstance(features, list):
+                facts.key_features.extend([str(f).strip() for f in features if f])
+    
+    # Fallback: try old methods if PAGE_MODEL didn't work
+    if not facts.price:
+        print(f"[DEBUG] PAGE_MODEL extraction incomplete, trying fallback methods")
+        # Try JSON-LD
+        for script in soup.find_all("script", attrs={"type": "application/ld+json"}):
+            try:
+                raw = script.get_text(strip=True)
+                if not raw:
+                    continue
+                data = json.loads(raw)
+                if isinstance(data, dict):
+                    price = deep_get(data, ["offers", "price"])
+                    if facts.price is None and price is not None:
+                        facts.price = money_int(price)
+                    
+                    addr = deep_get(data, ["address"])
+                    if isinstance(addr, dict) and facts.address is None:
+                        postal = addr.get("postalCode")
+                        if postal:
+                            facts.postcode = str(postal).strip()
+                        bits = [addr.get("streetAddress"), addr.get("addressLocality"), addr.get("addressRegion"), postal]
+                        bits = [b for b in bits if b]
+                        if bits:
+                            facts.address = ", ".join(bits)
+            except Exception:
+                continue
+        
+        # Fallback price from HTML
+        if facts.price is None:
+            price_tag = soup.select_one('[data-testid="price"]') or soup.select_one(".property-header-price")
+            if price_tag:
+                facts.price = money_int(price_tag.get_text(" ", strip=True))
 
-        addr = deep_get(item, ["address"])
-        if isinstance(addr, dict):
-            postal = addr.get("postalCode")
-            if facts.postcode is None and postal:
-                facts.postcode = str(postal).strip()
-            if facts.address is None:
-                bits = [addr.get("streetAddress"), addr.get("addressLocality"), addr.get("addressRegion"), postal]
-                bits = [b for b in bits if b]
-                if bits:
-                    facts.address = ", ".join(bits)
-
-        if facts.property_type is None:
-            t = item.get("@type") or item.get("name")
-            if isinstance(t, str):
-                facts.property_type = t
-
-    # __NEXT_DATA__ (best-effort)
-    nd = extract_next_data(soup)
-    if nd:
-        candidate_paths = [
-            ["props", "pageProps", "propertyData"],
-            ["props", "pageProps", "initialReduxState", "propertyDetails", "property"],
-            ["props", "pageProps", "initialState", "property"],
-        ]
-        pdata = None
-        for p in candidate_paths:
-            pdata = deep_get(nd, p)
-            if isinstance(pdata, dict):
-                break
-            pdata = None
-
-        if isinstance(pdata, dict):
-            facts.bedrooms = facts.bedrooms or safe_int(pdata.get("bedrooms") or pdata.get("bedroomCount"))
-            facts.bathrooms = facts.bathrooms or safe_int(pdata.get("bathrooms") or pdata.get("bathroomCount"))
-            facts.property_type = facts.property_type or pdata.get("propertyType")
-            facts.tenure = facts.tenure or pdata.get("tenure")
-
-            fa = pdata.get("floorArea") or pdata.get("floorAreaSqm") or deep_get(pdata, ["floorArea", "value"])
-            if facts.floor_area_sqm is None and fa is not None:
-                try:
-                    facts.floor_area_sqm = float(fa)
-                except Exception:
-                    pass
-
-            epc = pdata.get("epcRating") or deep_get(pdata, ["epc", "rating"])
-            if isinstance(epc, str) and not facts.epc_rating:
-                facts.epc_rating = epc.strip()
-
-            kf = pdata.get("keyFeatures") or pdata.get("features")
-            if isinstance(kf, list):
-                facts.key_features.extend([str(x).strip() for x in kf if x])
-
-    # Fallback price from HTML
-    if facts.price is None:
-        price_tag = soup.select_one('[data-testid="price"]') or soup.select_one(".property-header-price")
-        if price_tag:
-            facts.price = money_int(price_tag.get_text(" ", strip=True))
-
-    # Floor area conversions
-    if facts.floor_area_sqm is None and facts.key_features:
-        joined = " | ".join(facts.key_features)
-        m = re.search(r"(\d{3,5})\s*(sq\s*ft|sqft)", joined, flags=re.I)
-        if m:
-            sqft = float(m.group(1))
-            facts.floor_area_sqft = sqft
-            facts.floor_area_sqm = round(sqft_to_sqm(sqft), 2)
-
-    if facts.floor_area_sqft is None and facts.floor_area_sqm is not None:
-        facts.floor_area_sqft = round(sqm_to_sqft(facts.floor_area_sqm), 0)
-
+    print(f"[DEBUG] Extracted facts: price={facts.price}, beds={facts.bedrooms}, postcode={facts.postcode}")
     return facts
-
-
-def safe_int(x: Any) -> Optional[int]:
-    try:
-        return int(x)
-    except Exception:
-        return None
 
 
 def estimate_value_from_comps(facts: ListingFacts, comps: List[Comp]) -> Tuple[Optional[int], Optional[int], Optional[int], List[str]]:
