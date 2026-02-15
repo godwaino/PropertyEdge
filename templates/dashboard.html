@@ -1,27 +1,72 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>PropertyEdge - Dashboard</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>PropertyEdge AI — Dashboard</title>
+  <link rel="stylesheet" href="/static/style.css" />
 </head>
 <body>
-    <header>
-        <h1>PropertyEdge Dashboard</h1>
-        <nav>
-            <a href="/">Dashboard</a>
-            <a href="/analysis">Analysis</a>
-        </nav>
+  <div class="wrap">
+    <header class="top">
+      <div>
+        <h1>PropertyEdge AI</h1>
+        <p class="sub">Paste a Rightmove link → get a repeatable “reasonableness” report.</p>
+      </div>
     </header>
-    
-    <main>
-        <section class="dashboard-content">
-            <h2>Welcome to PropertyEdge</h2>
-            <p>Your property analysis platform</p>
-        </section>
-    </main>
-    
-    <script src="{{ url_for('static', filename='app.js') }}"></script>
+
+    <section class="card">
+      <h2>New analysis</h2>
+      <form id="analyzeForm">
+        <input id="urlInput" type="url" placeholder="https://www.rightmove.co.uk/properties/..." required />
+        <button type="submit">Analyze</button>
+      </form>
+      <p class="hint">Note: Rightmove can block automated fetches. If you see errors, slow down usage or run from a server IP that isn’t rate-limited.</p>
+    </section>
+
+    <section class="card" id="resultCard" style="display:none;">
+      <div class="row">
+        <h2>Result</h2>
+        <div class="links" id="resultLinks"></div>
+      </div>
+      <div id="result"></div>
+    </section>
+
+    <section class="card">
+      <h2>Recent history</h2>
+      {% if analyses and analyses|length > 0 %}
+        <table>
+          <thead>
+            <tr>
+              <th>When (UTC)</th>
+              <th>Property</th>
+              <th>Score</th>
+              <th>Label</th>
+              <th>Link</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for a in analyses %}
+              <tr>
+                <td>{{ a.created_at_utc }}</td>
+                <td>{{ a.property_id or "—" }}</td>
+                <td>{{ a.score if a.score is not none else "—" }}</td>
+                <td>{{ a.label or "—" }}</td>
+                <td><a href="/a/{{ a.id }}">View</a></td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      {% else %}
+        <p>No analyses yet.</p>
+      {% endif %}
+    </section>
+
+    <footer class="footer">
+      <p>Educational content only — not financial advice or a professional valuation.</p>
+    </footer>
+  </div>
+
+  <script src="/static/app.js"></script>
 </body>
 </html>
