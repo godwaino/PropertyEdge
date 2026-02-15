@@ -2,10 +2,19 @@ from __future__ import annotations
 
 import re
 import sqlite3
+from dataclasses import dataclass
 from datetime import datetime, timedelta
 from typing import List, Optional
 
-from propertyedge_core import Comp
+
+@dataclass
+class Comp:
+    price: int
+    date: str
+    postcode: str
+    property_type: str
+    street: Optional[str] = None
+    town: Optional[str] = None
 
 
 def postcode_sector(pc: str) -> str:

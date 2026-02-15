@@ -10,7 +10,7 @@ from typing import Any, Dict, List, Optional, Tuple
 import requests
 from bs4 import BeautifulSoup
 
-from ppd_sqlite import find_comps_sqlite
+from ppd_sqlite import find_comps_sqlite, Comp
 
 
 @dataclass
@@ -28,16 +28,6 @@ class ListingFacts:
     floor_area_sqft: Optional[float] = None
     epc_rating: Optional[str] = None
     key_features: List[str] = None
-
-
-@dataclass
-class Comp:
-    price: int
-    date: str
-    postcode: str
-    property_type: str
-    street: Optional[str] = None
-    town: Optional[str] = None
 
 
 def parse_property_id(url: str) -> str:
@@ -311,7 +301,7 @@ def reasonableness_score(facts: ListingFacts, fair_mid: Optional[int], comps_use
     elif score >= 60:
         label = "Slight premium / negotiate"
     elif score >= 40:
-        label = "Overpriced unless there’s hidden value"
+        label = "Overpriced unless there's hidden value"
     else:
         label = "Stretch pricing / proceed cautiously"
 
