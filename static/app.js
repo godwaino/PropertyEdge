@@ -89,37 +89,57 @@ document.addEventListener("DOMContentLoaded", () => {
   const resultDiv = document.getElementById("result");
   const resultLinks = document.getElementById("resultLinks");
 
+  console.log("PropertyEdge JavaScript loaded");
+
   form.addEventListener("submit", async (e) => {
     e.preventDefault();
     const url = input.value.trim();
     if (!url) return;
+
+    console.log("Submitting analysis for:", url);
 
     resultCard.style.display = "block";
     resultLinks.innerHTML = "";
     resultDiv.innerHTML = "<p class='muted'>Running analysis…</p>";
 
     try {
+      console.log("Sending POST request to /analyze");
       const res = await fetch("/analyze", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ url })
       });
+      
+      console.log("Response status:", res.status);
       const data = await res.json();
-      if (!data.ok) throw new Error(data.error || "Unknown error");
+      console.log("Response data:", data);
+      
+      if (!data.ok) {
+        const errorMsg = data.error || "Unknown error";
+        const trace = data.trace || "";
+        console.error("Analysis failed:", errorMsg);
+        if (trace) console.error("Trace:", trace);
+        throw new Error(errorMsg);
+      }
 
       const result = data.result;
+      console.log("Analysis result:", result);
+      
       resultDiv.innerHTML = "";
       resultDiv.appendChild(renderResult(result));
 
-      const a1 = el("a", { class: "btn", href: result.permalink }, ["Permalink"]);
-      const a2 = el("a", { class: "btn", href: result.permalink + "/json" }, ["JSON"]);
-      const a3 = el("a", { class: "btn", href: result.permalink + "/md" }, ["Markdown"]);
-      resultLinks.appendChild(a1);
-      resultLinks.appendChild(a2);
-      resultLinks.appendChild(a3);
+      if (result.permalink) {
+        const a1 = el("a", { class: "btn", href: result.permalink }, ["Permalink"]);
+        const a2 = el("a", { class: "btn", href: result.permalink + "/json" }, ["JSON"]);
+        const a3 = el("a", { class: "btn", href: result.permalink + "/md" }, ["Markdown"]);
+        resultLinks.appendChild(a1);
+        resultLinks.appendChild(a2);
+        resultLinks.appendChild(a3);
+      }
 
     } catch (err) {
-      resultDiv.innerHTML = `<p class="error">Error: ${err.message}</p>`;
+      console.error("Error caught:", err);
+      resultDiv.innerHTML = `<div class="error"><h3>Error</h3><p>${err.message}</p><p class="muted">Check browser console (F12) for details.</p></div>`;
     }
   });
 });
