@@ -1,27 +1,36 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>PropertyEdge - Analysis</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>PropertyEdge AI — Analysis {{ row.id }}</title>
+  <link rel="stylesheet" href="/static/style.css" />
 </head>
 <body>
-    <header>
-        <h1>PropertyEdge Analysis</h1>
-        <nav>
-            <a href="/">Dashboard</a>
-            <a href="/analysis">Analysis</a>
-        </nav>
+  <div class="wrap">
+    <header class="top">
+      <div>
+        <h1>PropertyEdge AI</h1>
+        <p class="sub">Saved analysis</p>
+      </div>
+      <div class="links">
+        <a class="btn" href="/">← Back</a>
+        <a class="btn" href="/a/{{ row.id }}/json">JSON</a>
+        <a class="btn" href="/a/{{ row.id }}/md">Markdown</a>
+      </div>
     </header>
-    
-    <main>
-        <section class="analysis-content">
-            <h2>Property Analysis</h2>
-            <p>Analysis tools and insights will appear here</p>
-        </section>
-    </main>
-    
-    <script src="{{ url_for('static', filename='app.js') }}"></script>
+
+    <section class="card">
+      <h2>Summary</h2>
+      <p><strong>Rightmove:</strong> <a href="{{ row.url }}" target="_blank" rel="noreferrer">{{ row.url }}</a></p>
+      <p><strong>Score:</strong> {{ row.valuation.score if row.valuation else "—" }} / 100 — {{ row.valuation.label if row.valuation else "—" }}</p>
+      <p><strong>Fair value (mid):</strong> {{ row.valuation.fair_value_mid if row.valuation else "—" }}</p>
+    </section>
+
+    <section class="card">
+      <h2>Markdown report</h2>
+      <pre class="pre">{{ row.md_report }}</pre>
+    </section>
+  </div>
 </body>
 </html>
