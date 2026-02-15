@@ -9,15 +9,24 @@ function el(tag, attrs = {}, children = []) {
   return n;
 }
 
+function num(v) {
+  const n = Number(v);
+  return Number.isFinite(n) ? n : null;
+}
+
 function fmtMoney(n) {
-  if (n === null || n === undefined) return "—";
-  return "£" + Number(n).toLocaleString("en-GB");
+  const x = num(n);
+  if (x === null) return "—";
+  return "£" + x.toLocaleString("en-GB");
 }
 
 function renderResult(result) {
   const facts = result.facts || {};
   const val = result.valuation || {};
   const comps = result.comps || [];
+
+  const sqm = num(facts.floor_area_sqm);
+  const sqft = num(facts.floor_area_sqft);
 
   const root = el("div", {}, []);
 
@@ -27,7 +36,7 @@ function renderResult(result) {
       el("p", {}, [`Asking: ${fmtMoney(facts.price)}`]),
       el("p", {}, [`Beds/Baths: ${facts.bedrooms ?? "—"}/${facts.bathrooms ?? "—"}`]),
       el("p", {}, [`Tenure: ${facts.tenure ?? "—"}`]),
-      el("p", {}, [`Size: ${facts.floor_area_sqm ? facts.floor_area_sqm.toFixed(2) + " sqm" : "—"}`]),
+      el("p", {}, [`Size: ${sqm !== null ? sqm.toFixed(2) + " sqm" : "—"}${sqft !== null ? " (" + Math.round(sqft) + " sq ft)" : ""}`]),
       el("p", {}, [`EPC: ${facts.epc_rating ?? "—"}`]),
     ]),
     el("div", { class: "box" }, [
@@ -103,8 +112,8 @@ document.addEventListener("DOMContentLoaded", () => {
     resultDiv.innerHTML = "<p class='muted'>Running analysis…</p>";
 
     try {
-      console.log("Sending POST request to /analyze");
-      const res = await fetch("/analyze", {
+      console.log("Sending POST request to analyze");
+      const res = await fetch("analyze", {   // relative path is safer in Codespaces
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ url })
@@ -116,17 +125,21 @@ document.addEventListener("DOMContentLoaded", () => {
       
       if (!data.ok) {
         const errorMsg = data.error || "Unknown error";
-        const trace = data.trace || "";
         console.error("Analysis failed:", errorMsg);
-        if (trace) console.error("Trace:", trace);
         throw new Error(errorMsg);
       }
 
       const result = data.result;
       console.log("Analysis result:", result);
-      
+
       resultDiv.innerHTML = "";
-      resultDiv.appendChild(renderResult(result));
+      try {
+        resultDiv.appendChild(renderResult(result));
+      } catch (uiErr) {
+        resultDiv.innerHTML = `<p class="error">UI render error: ${uiErr.message}</p>`;
+        console.error("UI render error:", uiErr);
+        return;
+      }
 
       if (result.permalink) {
         const a1 = el("a", { class: "btn", href: result.permalink }, ["Permalink"]);
@@ -139,7 +152,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
     } catch (err) {
       console.error("Error caught:", err);
-      resultDiv.innerHTML = `<div class="error"><h3>Error</h3><p>${err.message}</p><p class="muted">Check browser console (F12) for details.</p></div>`;
+      resultDiv.innerHTML = `<p class="error">Error: ${err.message}</p>`;
     }
   });
 });
