@@ -72,7 +72,14 @@ export default function AnalysisResults({ result, property }: Props) {
       <div className="bg-navy-card border border-gray-800 rounded-2xl p-6 mb-6">
         <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
           <div className="text-center sm:text-left">
-            <p className="text-gray-400 text-xs uppercase tracking-wider">AI Valuation</p>
+            <p className="text-gray-400 text-xs uppercase tracking-wider">
+              AI Valuation
+              {result.comparables_used !== undefined && result.comparables_used > 0 && (
+                <span className="ml-2 text-cyan/70 normal-case">
+                  ({result.comparables_used} Land Registry sales used)
+                </span>
+              )}
+            </p>
             <p className="text-3xl font-bold text-white mt-1">
               {formatCurrency(result.valuation.amount)}
             </p>

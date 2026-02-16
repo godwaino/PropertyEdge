@@ -22,6 +22,7 @@ export interface AnalysisResult {
   valuation: { amount: number; confidence: number; basis?: string };
   verdict: 'GOOD_DEAL' | 'FAIR' | 'OVERPRICED';
   savings: number;
+  comparables_used?: number;
   red_flags: AnalysisItem[];
   warnings: AnalysisItem[];
   positives: AnalysisItem[];

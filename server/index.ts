@@ -128,6 +128,105 @@ interface PropertyRequest {
   leaseYears?: number;
 }
 
+interface ComparableSale {
+  price: number;
+  date: string;
+  address: string;
+  propertyType: string;
+  newBuild: boolean;
+}
+
+// Fetch real sold prices from HM Land Registry SPARQL endpoint
+async function fetchComparables(postcode: string): Promise<ComparableSale[]> {
+  const sparqlEndpoint = 'https://landregistry.data.gov.uk/landregistry/query';
+
+  // First try exact postcode, then fallback to outward code (district)
+  const outwardCode = postcode.trim().split(/\s+/)[0].toUpperCase();
+  const fullPostcode = postcode.trim().toUpperCase();
+
+  // Query for exact postcode first, then broader district
+  for (const postcodeFilter of [
+    `VALUES ?postcode {"${fullPostcode}"^^xsd:string}`,
+    `FILTER(STRSTARTS(?postcode, "${outwardCode} "))`,
+  ]) {
+    const query = `
+      PREFIX lrppi: <http://landregistry.data.gov.uk/def/ppi/>
+      PREFIX lrcommon: <http://landregistry.data.gov.uk/def/common/>
+      PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
+
+      SELECT ?price ?date ?paon ?street ?town ?ptype ?newBuild
+      WHERE {
+        ${postcodeFilter}
+        ?txn lrppi:pricePaid ?price ;
+             lrppi:transactionDate ?date ;
+             lrppi:propertyAddress ?addr .
+        ?addr lrcommon:postcode ?postcode .
+        OPTIONAL { ?addr lrcommon:paon ?paon }
+        OPTIONAL { ?addr lrcommon:street ?street }
+        OPTIONAL { ?addr lrcommon:town ?town }
+        OPTIONAL { ?txn lrppi:propertyType/lrcommon:label ?ptype }
+        OPTIONAL { ?txn lrppi:newBuild ?newBuild }
+        FILTER(?date >= "2020-01-01"^^xsd:date)
+      }
+      ORDER BY DESC(?date)
+      LIMIT 20
+    `;
+
+    try {
+      const params = new URLSearchParams({ query, output: 'json' });
+      const response = await fetch(`${sparqlEndpoint}?${params.toString()}`, {
+        headers: { Accept: 'application/sparql-results+json' },
+        signal: AbortSignal.timeout(8000),
+      });
+
+      if (!response.ok) continue;
+
+      const data = await response.json() as any;
+      const bindings = data?.results?.bindings;
+      if (!bindings || bindings.length === 0) continue;
+
+      const sales: ComparableSale[] = bindings.map((b: any) => ({
+        price: parseInt(b.price?.value || '0'),
+        date: b.date?.value?.substring(0, 10) || '',
+        address: [b.paon?.value, b.street?.value, b.town?.value].filter(Boolean).join(', '),
+        propertyType: (b.ptype?.value || 'unknown').toLowerCase(),
+        newBuild: b.newBuild?.value === 'true',
+      }));
+
+      if (sales.length > 0) return sales;
+    } catch (err: any) {
+      console.error(`Land Registry query failed for ${postcodeFilter}:`, err?.message);
+    }
+  }
+
+  return [];
+}
+
+// Format comparables into a text summary for the AI prompt
+function formatComparables(sales: ComparableSale[], propertyType: string): string {
+  if (sales.length === 0) return '';
+
+  // Filter to same property type if possible
+  const sameType = sales.filter(s => s.propertyType.includes(propertyType.split('-')[0]));
+  const relevantSales = sameType.length >= 3 ? sameType : sales;
+
+  const lines = relevantSales.slice(0, 15).map(s =>
+    `  - £${s.price.toLocaleString()} | ${s.date} | ${s.address} | ${s.propertyType}${s.newBuild ? ' (new build)' : ''}`
+  );
+
+  const prices = relevantSales.map(s => s.price);
+  const avgPrice = Math.round(prices.reduce((a, b) => a + b, 0) / prices.length);
+  const minPrice = Math.min(...prices);
+  const maxPrice = Math.max(...prices);
+
+  return `
+REAL COMPARABLE SALES (HM Land Registry Price Paid Data):
+${lines.join('\n')}
+
+Summary: ${relevantSales.length} recent sales found. Range: £${minPrice.toLocaleString()} - £${maxPrice.toLocaleString()}. Average: £${avgPrice.toLocaleString()}.
+YOU MUST base your valuation primarily on this real data, NOT on general assumptions. Adjust for size, condition, and specifics.`;
+}
+
 // Resolve a partial postcode (e.g. "M3") to a full one using address context
 async function resolveFullPostcode(partialPostcode: string, address: string): Promise<string> {
   const trimmed = partialPostcode.trim().toUpperCase();
@@ -286,12 +385,16 @@ app.post('/api/analyze', rateLimit, async (req, res) => {
   try {
     const property: PropertyRequest = req.body;
 
+    // Fetch real comparable sales from Land Registry
+    const comparables = await fetchComparables(property.postcode);
+    const comparablesText = formatComparables(comparables, property.propertyType);
+
     const leaseholdInfo =
       property.tenure === 'leasehold'
         ? `\n- Service charge: £${property.serviceCharge}/yr, Ground rent: £${property.groundRent}/yr, Lease remaining: ${property.leaseYears} years`
         : '';
 
-    const prompt = `You are a UK property valuation expert with deep knowledge of UK property prices, Land Registry sold prices, and local market conditions.
+    const prompt = `You are a UK property valuation expert. You have access to REAL Land Registry sold price data below.
 
 Property Details:
 - Address: ${property.address}, ${property.postcode}
@@ -299,18 +402,20 @@ Property Details:
 - Type: ${property.propertyType}, ${property.bedrooms} bedrooms, ${property.sizeSqm}sqm
 - Year Built: ${property.yearBuilt}
 - Tenure: ${property.tenure}${leaseholdInfo}
-
+${comparablesText}
 VALUATION METHODOLOGY — you must follow these steps:
-1. Identify the postcode district (e.g. M3, SW1, E14) and consider what similar properties actually sell for there.
-2. Calculate a £/sqm rate typical for ${property.propertyType}s in ${property.postcode}. Use your knowledge of UK Land Registry data and sold prices.
-3. Apply adjustments for: number of bedrooms, year built, tenure, condition typical for age, lease length if leasehold, service charges.
-4. Your valuation MUST be an independent figure derived from comparable evidence — do NOT simply adjust the asking price by a percentage. The valuation can be significantly above or below the asking price.
-5. Set confidence as a percentage range (e.g. 8.5 means +/- 8.5%). Lower confidence = more certain. Use 5-10 for areas you know well, 10-20 for unusual properties.
+1. ${comparables.length > 0
+      ? 'USE THE REAL COMPARABLE SALES DATA ABOVE as your primary evidence. Identify the most similar properties and derive your valuation from their sold prices.'
+      : 'No Land Registry data was available for this postcode. Use your knowledge of UK property prices for this area to estimate.'}
+2. Calculate a £/sqm rate based on the comparable sales data (or your knowledge if no data).
+3. Apply adjustments for: number of bedrooms, year built, tenure, condition, lease length, service charges.
+4. Your valuation MUST be an independent figure — do NOT simply adjust the asking price by a percentage. The valuation can be significantly above or below asking.
+5. Confidence: 5-10% for well-evidenced valuations with good comparables, 10-20% if limited data.
 
-IMPORTANT:
-- Your valuation should reflect what this property would ACTUALLY sell for based on comparable sales in the area.
-- If the asking price seems too high or too low for the area, say so clearly.
-- A £${property.askingPrice.toLocaleString()} ${property.bedrooms}-bed ${property.propertyType} in ${property.postcode} — think carefully about whether this price makes sense for this specific location.
+CRITICAL:
+- If comparable data is provided, your valuation MUST be anchored to those real sold prices, not the asking price.
+- If the asking price is far from what comparables show, say so clearly in the basis.
+- Explain which specific comparable sales informed your figure.
 
 Also analyze:
 - Red flags: serious issues with financial impact >£5,000
@@ -319,21 +424,21 @@ Also analyze:
 
 You MUST respond with ONLY valid JSON in this exact format, no other text:
 {
-  "valuation": {"amount": 287500, "confidence": 8.5, "basis": "Similar 2-bed flats in M3 sold for £280k-£300k in 2024. At £3,350/sqm this is in line with recent sales."},
+  "valuation": {"amount": 287500, "confidence": 8.5, "basis": "Based on 12 Land Registry sales in M3: similar 2-bed flats sold for £270k-£310k. At £3,350/sqm for 85sqm, adjusted for year built."},
   "verdict": "FAIR",
   "savings": 2500,
-  "red_flags": [{"title": "Example Issue", "description": "Detailed explanation with specifics", "impact": 12000}],
-  "warnings": [{"title": "Example Warning", "description": "Detailed explanation with specifics", "impact": 3000}],
-  "positives": [{"title": "Example Positive", "description": "Detailed explanation with specifics", "impact": 5000}]
+  "comparables_used": 12,
+  "red_flags": [{"title": "Issue", "description": "Detailed explanation", "impact": 12000}],
+  "warnings": [{"title": "Warning", "description": "Detailed explanation", "impact": 3000}],
+  "positives": [{"title": "Positive", "description": "Detailed explanation", "impact": 5000}]
 }
 
 Where:
-- valuation.basis explains HOW you arrived at the figure (comparables, £/sqm, adjustments)
+- valuation.basis explains specifically which comparables/data informed the figure
+- comparables_used is the number of Land Registry sales used (0 if none available)
 - verdict is one of: "GOOD_DEAL", "FAIR", or "OVERPRICED"
-- savings is the difference between asking price and your valuation (positive = buyer saves, negative = premium)
-- impact values are in £ (positive numbers)
-- Include at least 2 items in each category
-- Be specific about the location and realistic about UK property values`;
+- savings = asking price minus your valuation (positive = overpriced, negative = good deal)
+- Include at least 2 items in each category`;
 
     const message = await anthropic.messages.create({
       model: 'claude-sonnet-4-20250514',
@@ -391,40 +496,73 @@ Where:
 });
 
 // Demo endpoint — always works, no API key needed
-app.post('/api/demo', rateLimit, (req, res) => {
+app.post('/api/demo', rateLimit, async (req, res) => {
   const property: PropertyRequest = req.body;
   const price = property.askingPrice || 285000;
+  const sqm = property.sizeSqm || 75;
 
-  // Estimate £/sqm based on property type and a simple postcode heuristic
-  const postcodePrefix = (property.postcode || '').split(/\d/)[0].toUpperCase();
-  // Rough average £/sqm by area tier (central London, outer London, major cities, elsewhere)
-  const centralLondon = ['SW', 'W', 'WC', 'EC', 'SE1', 'NW1', 'N1'];
-  const outerLondon = ['E', 'N', 'NW', 'SE', 'BR', 'CR', 'DA', 'EN', 'HA', 'IG', 'KT', 'RM', 'SM', 'TW', 'UB'];
-  const majorCities = ['M', 'B', 'LS', 'BS', 'EH', 'G', 'CF', 'L', 'NE', 'NG', 'S'];
+  // Fetch real comparable sales from Land Registry
+  const comparables = await fetchComparables(property.postcode || '');
 
-  let basePsm: number;
-  if (centralLondon.some(p => postcodePrefix.startsWith(p))) basePsm = 9500;
-  else if (outerLondon.some(p => postcodePrefix.startsWith(p))) basePsm = 5500;
-  else if (majorCities.some(p => postcodePrefix.startsWith(p))) basePsm = 3200;
-  else basePsm = 2400;
+  let valuation: number;
+  let basisText: string;
+  let comparablesUsed = 0;
 
-  // Adjust for property type
-  const typeMultiplier: Record<string, number> = { flat: 1.0, terraced: 0.95, 'semi-detached': 0.9, detached: 1.05, bungalow: 0.85 };
-  basePsm *= typeMultiplier[property.propertyType] || 1.0;
+  if (comparables.length >= 3) {
+    // Use real Land Registry data to derive valuation
+    const sameType = comparables.filter(s =>
+      s.propertyType.includes((property.propertyType || '').split('-')[0])
+    );
+    const relevantSales = sameType.length >= 3 ? sameType : comparables;
+    comparablesUsed = relevantSales.length;
 
-  // Adjust for age (newer = slight premium)
-  const age = 2025 - (property.yearBuilt || 2000);
-  if (age < 5) basePsm *= 1.08;
-  else if (age < 15) basePsm *= 1.03;
-  else if (age > 50) basePsm *= 0.92;
+    const avgPrice = relevantSales.reduce((a, b) => a + b.price, 0) / relevantSales.length;
 
-  // Leasehold discount for short leases
-  if (property.tenure === 'leasehold' && property.leaseYears && property.leaseYears < 80) {
-    basePsm *= 0.85;
+    // Adjust average based on this property's size vs assumed average (~70sqm)
+    const sizeRatio = sqm / 70;
+    valuation = Math.round(avgPrice * sizeRatio / 1000) * 1000;
+
+    // Adjust for year built
+    const age = 2025 - (property.yearBuilt || 2000);
+    if (age < 5) valuation = Math.round(valuation * 1.05 / 1000) * 1000;
+    else if (age > 50) valuation = Math.round(valuation * 0.93 / 1000) * 1000;
+
+    // Leasehold short lease discount
+    if (property.tenure === 'leasehold' && property.leaseYears && property.leaseYears < 80) {
+      valuation = Math.round(valuation * 0.85 / 1000) * 1000;
+    }
+
+    const avgPsm = Math.round(valuation / sqm);
+    basisText = `Based on ${comparablesUsed} real Land Registry sales in ${property.postcode}. Average sold price: £${Math.round(avgPrice).toLocaleString()}. Estimated £${avgPsm}/sqm for ${sqm}sqm. Demo mode — add API key for full AI analysis.`;
+  } else {
+    // Fallback: estimate from postcode heuristic
+    const postcodePrefix = (property.postcode || '').split(/\d/)[0].toUpperCase();
+    const centralLondon = ['SW', 'W', 'WC', 'EC', 'SE1', 'NW1', 'N1'];
+    const outerLondon = ['E', 'N', 'NW', 'SE', 'BR', 'CR', 'DA', 'EN', 'HA', 'IG', 'KT', 'RM', 'SM', 'TW', 'UB'];
+    const majorCities = ['M', 'B', 'LS', 'BS', 'EH', 'G', 'CF', 'L', 'NE', 'NG', 'S'];
+
+    let basePsm: number;
+    if (centralLondon.some(p => postcodePrefix.startsWith(p))) basePsm = 9500;
+    else if (outerLondon.some(p => postcodePrefix.startsWith(p))) basePsm = 5500;
+    else if (majorCities.some(p => postcodePrefix.startsWith(p))) basePsm = 3200;
+    else basePsm = 2400;
+
+    const typeMultiplier: Record<string, number> = { flat: 1.0, terraced: 0.95, 'semi-detached': 0.9, detached: 1.05, bungalow: 0.85 };
+    basePsm *= typeMultiplier[property.propertyType] || 1.0;
+
+    const age = 2025 - (property.yearBuilt || 2000);
+    if (age < 5) basePsm *= 1.08;
+    else if (age < 15) basePsm *= 1.03;
+    else if (age > 50) basePsm *= 0.92;
+
+    if (property.tenure === 'leasehold' && property.leaseYears && property.leaseYears < 80) {
+      basePsm *= 0.85;
+    }
+
+    valuation = Math.round(basePsm * sqm / 1000) * 1000;
+    basisText = `Estimated at £${Math.round(basePsm).toLocaleString()}/sqm for ${property.propertyType || 'flat'}s in ${property.postcode || 'this area'}. No Land Registry data found for this postcode. Demo mode — add API key for full AI analysis.`;
   }
 
-  const sqm = property.sizeSqm || 75;
-  const valuation = Math.round(basePsm * sqm / 1000) * 1000; // Round to nearest £1,000
   const savings = price - valuation;
   let verdict: string;
   if (savings > price * 0.05) verdict = 'OVERPRICED';
@@ -432,9 +570,10 @@ app.post('/api/demo', rateLimit, (req, res) => {
   else verdict = 'FAIR';
 
   res.json({
-    valuation: { amount: valuation, confidence: 12, basis: `Estimated at £${Math.round(basePsm).toLocaleString()}/sqm for ${property.propertyType || 'flat'}s in ${property.postcode || 'this area'}, based on ${sqm}sqm. Demo mode — add an API key for AI-researched valuations.` },
+    valuation: { amount: valuation, confidence: comparables.length >= 3 ? 10 : 15, basis: basisText },
     verdict,
     savings,
+    comparables_used: comparablesUsed,
     red_flags: [
       {
         title: 'Leasehold Ground Rent Escalation Risk',
