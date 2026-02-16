@@ -215,7 +215,7 @@ ${text.substring(0, 5000)}
 Return this exact JSON format:
 {
   "address": "street address without postcode",
-  "postcode": "UK postcode like SW1A 1AA",
+  "postcode": "full or partial UK postcode",
   "askingPrice": 285000,
   "bedrooms": 2,
   "sizeSqm": 85,
@@ -228,12 +228,14 @@ Return this exact JSON format:
 }
 
 Rules:
+- PRICE IS CRITICAL: Look for ANY price pattern: "£285,000", "Guide price £285,000", "Offers over £285,000", "Asking price: £285,000", "Price on application", "£285k", "From £285,000". Extract the number without £ or commas. If you see "250,000" anywhere, that is likely the price.
+- YEAR BUILT: Look for clues like "built in 2019", "new build", "converted in 2005", "Victorian" (~1880), "Edwardian" (~1905), "1930s semi", "post-war" (~1950), "1960s", "Georgian" (~1800), "Art Deco" (~1935), "period property" (~1900). Estimate from these clues. Use 0 ONLY if there are absolutely no clues.
 - propertyType must be one of: "flat", "terraced", "semi-detached", "detached", "bungalow"
 - tenure must be "leasehold" or "freehold"
 - askingPrice must be a number (no £ or commas)
 - If size is in sq ft, convert to sqm (multiply by 0.0929)
-- Use 0 for any field you cannot determine
-- Do NOT make up values — use 0 if unknown`,
+- Use 0 or "" for fields you genuinely cannot determine
+- Do NOT make up specific addresses or postcodes you aren't confident about`,
       }],
     });
 

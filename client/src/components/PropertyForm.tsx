@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react';
+import { useState } from 'react';
 import { PropertyInput } from '../types/property';
 
 interface Props {
@@ -6,13 +6,43 @@ interface Props {
   isLoading: boolean;
 }
 
+interface FormFields {
+  address: string;
+  postcode: string;
+  askingPrice: string;
+  propertyType: string;
+  bedrooms: string;
+  sizeSqm: string;
+  yearBuilt: string;
+  serviceCharge: string;
+  groundRent: string;
+  leaseYears: string;
+}
+
+const defaults: FormFields = {
+  address: '10 Deansgate',
+  postcode: 'M3 4LQ',
+  askingPrice: '285000',
+  propertyType: 'flat',
+  bedrooms: '2',
+  sizeSqm: '85',
+  yearBuilt: '2019',
+  serviceCharge: '1200',
+  groundRent: '250',
+  leaseYears: '999',
+};
+
 export default function PropertyForm({ onSubmit, isLoading }: Props) {
+  const [fields, setFields] = useState<FormFields>(defaults);
   const [tenure, setTenure] = useState('leasehold');
   const [listingText, setListingText] = useState('');
   const [isExtracting, setIsExtracting] = useState(false);
   const [extractError, setExtractError] = useState<string | null>(null);
   const [showImport, setShowImport] = useState(false);
-  const formRef = useRef<HTMLFormElement>(null);
+
+  const setField = (name: keyof FormFields, value: string) => {
+    setFields((prev) => ({ ...prev, [name]: value }));
+  };
 
   const handleExtract = async () => {
     if (!listingText.trim()) return;
@@ -33,23 +63,20 @@ export default function PropertyForm({ onSubmit, isLoading }: Props) {
         throw new Error(data.message || 'Could not extract details');
       }
 
-      const form = formRef.current;
-      if (!form) return;
-
-      // Auto-fill form fields
-      const fillField = (name: string, value: any) => {
-        if (value) (form.elements.namedItem(name) as HTMLInputElement).value = String(value);
-      };
-      fillField('address', data.address);
-      fillField('postcode', data.postcode);
-      fillField('askingPrice', data.askingPrice);
-      fillField('bedrooms', data.bedrooms);
-      fillField('sizeSqm', data.sizeSqm);
-      fillField('yearBuilt', data.yearBuilt);
-
-      if (data.propertyType) {
-        (form.elements.namedItem('propertyType') as HTMLSelectElement).value = data.propertyType;
-      }
+      // Update all fields that have real values (not 0 or empty)
+      setFields((prev) => ({
+        ...prev,
+        ...(data.address ? { address: data.address } : {}),
+        ...(data.postcode ? { postcode: data.postcode } : {}),
+        ...(data.askingPrice ? { askingPrice: String(data.askingPrice) } : {}),
+        ...(data.propertyType ? { propertyType: data.propertyType } : {}),
+        ...(data.bedrooms ? { bedrooms: String(data.bedrooms) } : {}),
+        ...(data.sizeSqm ? { sizeSqm: String(data.sizeSqm) } : {}),
+        ...(data.yearBuilt ? { yearBuilt: String(data.yearBuilt) } : {}),
+        ...(data.serviceCharge ? { serviceCharge: String(data.serviceCharge) } : {}),
+        ...(data.groundRent ? { groundRent: String(data.groundRent) } : {}),
+        ...(data.leaseYears ? { leaseYears: String(data.leaseYears) } : {}),
+      }));
 
       if (data.tenure) {
         setTenure(data.tenure);
@@ -66,23 +93,22 @@ export default function PropertyForm({ onSubmit, isLoading }: Props) {
 
   const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    const fd = new FormData(e.currentTarget);
 
     const property: PropertyInput = {
-      address: fd.get('address') as string,
-      postcode: fd.get('postcode') as string,
-      askingPrice: Number(fd.get('askingPrice')),
-      propertyType: fd.get('propertyType') as string,
-      bedrooms: Number(fd.get('bedrooms')),
-      sizeSqm: Number(fd.get('sizeSqm')),
-      yearBuilt: Number(fd.get('yearBuilt')),
+      address: fields.address,
+      postcode: fields.postcode,
+      askingPrice: Number(fields.askingPrice),
+      propertyType: fields.propertyType,
+      bedrooms: Number(fields.bedrooms),
+      sizeSqm: Number(fields.sizeSqm),
+      yearBuilt: Number(fields.yearBuilt),
       tenure,
     };
 
     if (tenure === 'leasehold') {
-      property.serviceCharge = Number(fd.get('serviceCharge')) || 0;
-      property.groundRent = Number(fd.get('groundRent')) || 0;
-      property.leaseYears = Number(fd.get('leaseYears')) || 99;
+      property.serviceCharge = Number(fields.serviceCharge) || 0;
+      property.groundRent = Number(fields.groundRent) || 0;
+      property.leaseYears = Number(fields.leaseYears) || 99;
     }
 
     onSubmit(property);
@@ -94,7 +120,6 @@ export default function PropertyForm({ onSubmit, isLoading }: Props) {
 
   return (
     <form
-      ref={formRef}
       onSubmit={handleSubmit}
       className="w-full max-w-4xl mx-auto bg-navy-card border border-gray-800 rounded-2xl p-6"
     >
@@ -145,22 +170,22 @@ export default function PropertyForm({ onSubmit, isLoading }: Props) {
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div className="md:col-span-2">
           <label className={labelClass}>Address</label>
-          <input name="address" className={inputClass} defaultValue="10 Deansgate" required />
+          <input name="address" className={inputClass} value={fields.address} onChange={(e) => setField('address', e.target.value)} required />
         </div>
 
         <div>
           <label className={labelClass}>Postcode</label>
-          <input name="postcode" className={inputClass} defaultValue="M3 4LQ" required />
+          <input name="postcode" className={inputClass} value={fields.postcode} onChange={(e) => setField('postcode', e.target.value)} required />
         </div>
 
         <div>
           <label className={labelClass}>Asking Price (&pound;)</label>
-          <input name="askingPrice" type="number" className={inputClass} defaultValue={285000} required />
+          <input name="askingPrice" type="number" className={inputClass} value={fields.askingPrice} onChange={(e) => setField('askingPrice', e.target.value)} required />
         </div>
 
         <div>
           <label className={labelClass}>Property Type</label>
-          <select name="propertyType" className={inputClass} defaultValue="flat">
+          <select name="propertyType" className={inputClass} value={fields.propertyType} onChange={(e) => setField('propertyType', e.target.value)}>
             <option value="flat">Flat / Apartment</option>
             <option value="terraced">Terraced House</option>
             <option value="semi-detached">Semi-Detached</option>
@@ -171,17 +196,17 @@ export default function PropertyForm({ onSubmit, isLoading }: Props) {
 
         <div>
           <label className={labelClass}>Bedrooms</label>
-          <input name="bedrooms" type="number" className={inputClass} defaultValue={2} required />
+          <input name="bedrooms" type="number" className={inputClass} value={fields.bedrooms} onChange={(e) => setField('bedrooms', e.target.value)} required />
         </div>
 
         <div>
           <label className={labelClass}>Size (sqm)</label>
-          <input name="sizeSqm" type="number" className={inputClass} defaultValue={85} required />
+          <input name="sizeSqm" type="number" className={inputClass} value={fields.sizeSqm} onChange={(e) => setField('sizeSqm', e.target.value)} required />
         </div>
 
         <div>
           <label className={labelClass}>Year Built</label>
-          <input name="yearBuilt" type="number" className={inputClass} defaultValue={2019} required />
+          <input name="yearBuilt" type="number" className={inputClass} value={fields.yearBuilt} onChange={(e) => setField('yearBuilt', e.target.value)} required />
         </div>
 
         <div className="md:col-span-2">
@@ -208,15 +233,15 @@ export default function PropertyForm({ onSubmit, isLoading }: Props) {
           <>
             <div>
               <label className={labelClass}>Service Charge (&pound;/yr)</label>
-              <input name="serviceCharge" type="number" className={inputClass} defaultValue={1200} />
+              <input name="serviceCharge" type="number" className={inputClass} value={fields.serviceCharge} onChange={(e) => setField('serviceCharge', e.target.value)} />
             </div>
             <div>
               <label className={labelClass}>Ground Rent (&pound;/yr)</label>
-              <input name="groundRent" type="number" className={inputClass} defaultValue={250} />
+              <input name="groundRent" type="number" className={inputClass} value={fields.groundRent} onChange={(e) => setField('groundRent', e.target.value)} />
             </div>
             <div>
               <label className={labelClass}>Lease Remaining (years)</label>
-              <input name="leaseYears" type="number" className={inputClass} defaultValue={999} />
+              <input name="leaseYears" type="number" className={inputClass} value={fields.leaseYears} onChange={(e) => setField('leaseYears', e.target.value)} />
             </div>
           </>
         )}
