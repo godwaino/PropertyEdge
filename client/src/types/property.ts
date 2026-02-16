@@ -19,7 +19,7 @@ export interface AnalysisItem {
 }
 
 export interface AnalysisResult {
-  valuation: { amount: number; confidence: number };
+  valuation: { amount: number; confidence: number; basis?: string };
   verdict: 'GOOD_DEAL' | 'FAIR' | 'OVERPRICED';
   savings: number;
   red_flags: AnalysisItem[];

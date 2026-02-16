@@ -79,6 +79,11 @@ export default function AnalysisResults({ result, property }: Props) {
             <p className="text-gray-500 text-xs mt-1">
               Asking: {formatCurrency(property.askingPrice)}
             </p>
+            {result.valuation.basis && (
+              <p className="text-gray-500 text-xs mt-2 max-w-md leading-relaxed">
+                {result.valuation.basis}
+              </p>
+            )}
           </div>
 
           <div className="flex flex-col items-center gap-2">

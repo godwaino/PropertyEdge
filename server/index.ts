@@ -291,7 +291,7 @@ app.post('/api/analyze', rateLimit, async (req, res) => {
         ? `\n- Service charge: £${property.serviceCharge}/yr, Ground rent: £${property.groundRent}/yr, Lease remaining: ${property.leaseYears} years`
         : '';
 
-    const prompt = `You are a UK property valuation expert. Analyze this UK property and provide a detailed assessment.
+    const prompt = `You are a UK property valuation expert with deep knowledge of UK property prices, Land Registry sold prices, and local market conditions.
 
 Property Details:
 - Address: ${property.address}, ${property.postcode}
@@ -300,25 +300,35 @@ Property Details:
 - Year Built: ${property.yearBuilt}
 - Tenure: ${property.tenure}${leaseholdInfo}
 
-Provide a thorough analysis considering:
-1. Fair market valuation based on location, size, type, and local market conditions
-2. Red flags - serious issues with financial impact >£5,000
-3. Warnings - moderate concerns with £1,000-£5,000 impact
-4. Positive factors - features that add value or reduce risk
+VALUATION METHODOLOGY — you must follow these steps:
+1. Identify the postcode district (e.g. M3, SW1, E14) and consider what similar properties actually sell for there.
+2. Calculate a £/sqm rate typical for ${property.propertyType}s in ${property.postcode}. Use your knowledge of UK Land Registry data and sold prices.
+3. Apply adjustments for: number of bedrooms, year built, tenure, condition typical for age, lease length if leasehold, service charges.
+4. Your valuation MUST be an independent figure derived from comparable evidence — do NOT simply adjust the asking price by a percentage. The valuation can be significantly above or below the asking price.
+5. Set confidence as a percentage range (e.g. 8.5 means +/- 8.5%). Lower confidence = more certain. Use 5-10 for areas you know well, 10-20 for unusual properties.
 
-Be realistic and specific to the UK property market. Consider postcode-specific factors.
+IMPORTANT:
+- Your valuation should reflect what this property would ACTUALLY sell for based on comparable sales in the area.
+- If the asking price seems too high or too low for the area, say so clearly.
+- A £${property.askingPrice.toLocaleString()} ${property.bedrooms}-bed ${property.propertyType} in ${property.postcode} — think carefully about whether this price makes sense for this specific location.
+
+Also analyze:
+- Red flags: serious issues with financial impact >£5,000
+- Warnings: moderate concerns with £1,000-£5,000 impact
+- Positives: features that add value or reduce risk
 
 You MUST respond with ONLY valid JSON in this exact format, no other text:
 {
-  "valuation": {"amount": 287500, "confidence": 3.2},
+  "valuation": {"amount": 287500, "confidence": 8.5, "basis": "Similar 2-bed flats in M3 sold for £280k-£300k in 2024. At £3,350/sqm this is in line with recent sales."},
   "verdict": "FAIR",
   "savings": 2500,
-  "red_flags": [{"title": "Example Issue", "description": "Detailed explanation", "impact": 12000}],
-  "warnings": [{"title": "Example Warning", "description": "Detailed explanation", "impact": 3000}],
-  "positives": [{"title": "Example Positive", "description": "Detailed explanation", "impact": 5000}]
+  "red_flags": [{"title": "Example Issue", "description": "Detailed explanation with specifics", "impact": 12000}],
+  "warnings": [{"title": "Example Warning", "description": "Detailed explanation with specifics", "impact": 3000}],
+  "positives": [{"title": "Example Positive", "description": "Detailed explanation with specifics", "impact": 5000}]
 }
 
 Where:
+- valuation.basis explains HOW you arrived at the figure (comparables, £/sqm, adjustments)
 - verdict is one of: "GOOD_DEAL", "FAIR", or "OVERPRICED"
 - savings is the difference between asking price and your valuation (positive = buyer saves, negative = premium)
 - impact values are in £ (positive numbers)
@@ -384,12 +394,47 @@ Where:
 app.post('/api/demo', rateLimit, (req, res) => {
   const property: PropertyRequest = req.body;
   const price = property.askingPrice || 285000;
-  const valuation = Math.round(price * 0.965);
+
+  // Estimate £/sqm based on property type and a simple postcode heuristic
+  const postcodePrefix = (property.postcode || '').split(/\d/)[0].toUpperCase();
+  // Rough average £/sqm by area tier (central London, outer London, major cities, elsewhere)
+  const centralLondon = ['SW', 'W', 'WC', 'EC', 'SE1', 'NW1', 'N1'];
+  const outerLondon = ['E', 'N', 'NW', 'SE', 'BR', 'CR', 'DA', 'EN', 'HA', 'IG', 'KT', 'RM', 'SM', 'TW', 'UB'];
+  const majorCities = ['M', 'B', 'LS', 'BS', 'EH', 'G', 'CF', 'L', 'NE', 'NG', 'S'];
+
+  let basePsm: number;
+  if (centralLondon.some(p => postcodePrefix.startsWith(p))) basePsm = 9500;
+  else if (outerLondon.some(p => postcodePrefix.startsWith(p))) basePsm = 5500;
+  else if (majorCities.some(p => postcodePrefix.startsWith(p))) basePsm = 3200;
+  else basePsm = 2400;
+
+  // Adjust for property type
+  const typeMultiplier: Record<string, number> = { flat: 1.0, terraced: 0.95, 'semi-detached': 0.9, detached: 1.05, bungalow: 0.85 };
+  basePsm *= typeMultiplier[property.propertyType] || 1.0;
+
+  // Adjust for age (newer = slight premium)
+  const age = 2025 - (property.yearBuilt || 2000);
+  if (age < 5) basePsm *= 1.08;
+  else if (age < 15) basePsm *= 1.03;
+  else if (age > 50) basePsm *= 0.92;
+
+  // Leasehold discount for short leases
+  if (property.tenure === 'leasehold' && property.leaseYears && property.leaseYears < 80) {
+    basePsm *= 0.85;
+  }
+
+  const sqm = property.sizeSqm || 75;
+  const valuation = Math.round(basePsm * sqm / 1000) * 1000; // Round to nearest £1,000
+  const savings = price - valuation;
+  let verdict: string;
+  if (savings > price * 0.05) verdict = 'OVERPRICED';
+  else if (savings < -price * 0.03) verdict = 'GOOD_DEAL';
+  else verdict = 'FAIR';
 
   res.json({
-    valuation: { amount: valuation, confidence: 3.2 },
-    verdict: 'FAIR',
-    savings: price - valuation,
+    valuation: { amount: valuation, confidence: 12, basis: `Estimated at £${Math.round(basePsm).toLocaleString()}/sqm for ${property.propertyType || 'flat'}s in ${property.postcode || 'this area'}, based on ${sqm}sqm. Demo mode — add an API key for AI-researched valuations.` },
+    verdict,
+    savings,
     red_flags: [
       {
         title: 'Leasehold Ground Rent Escalation Risk',
