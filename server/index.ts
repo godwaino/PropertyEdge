@@ -126,6 +126,7 @@ interface PropertyRequest {
   serviceCharge?: number;
   groundRent?: number;
   leaseYears?: number;
+  persona?: string;
 }
 
 interface ComparableSale {
@@ -439,9 +440,29 @@ app.post('/api/analyze', rateLimit, async (req, res) => {
         ? `\n- Service charge: £${property.serviceCharge}/yr, Ground rent: £${property.groundRent}/yr, Lease remaining: ${property.leaseYears} years`
         : '';
 
+    const personaInstructions: Record<string, string> = {
+      'First-Time Buyer': `\nBUYER PROFILE: First-Time Buyer.
+- Highlight stamp duty savings (first-time buyer relief applies under £425k).
+- Flag Help to Buy / shared ownership eligibility if relevant.
+- Emphasise hidden ongoing costs (service charge, ground rent, maintenance).
+- Warn about any issues that could affect mortgage approval.`,
+      'Property Investor': `\nBUYER PROFILE: Property Investor.
+- Include estimated rental yield (gross and net) based on local rents.
+- Add rent assumptions and expected monthly cashflow.
+- Assess downside risk: void periods, tenant default, interest rate sensitivity.
+- Comment on capital appreciation potential and exit strategy.`,
+      'Home Mover': `\nBUYER PROFILE: Home Mover.
+- Focus on value relative to surrounding streets and the buyer's likely current area.
+- Highlight chain-free leverage if applicable.
+- Note school catchment, transport links, and lifestyle factors.
+- Compare running costs to typical houses in the area.`,
+    };
+
+    const personaBlock = property.persona ? (personaInstructions[property.persona] || '') : '';
+
     const prompt = `You are a UK property valuation expert and buyer's negotiation advisor. You have access to REAL Land Registry sold price data below.
 
-Your task: determine the fair market value of this property, then advise the buyer on negotiation strategy. You do NOT know the asking price — value it independently.
+Your task: determine the fair market value of this property, then advise the buyer on negotiation strategy. You do NOT know the asking price — value it independently.${personaBlock}
 
 Property Details:
 - Address: ${property.address}, ${property.postcode}
