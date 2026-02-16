@@ -28,7 +28,9 @@ export default function App() {
 
       if (!response.ok) {
         const errData = await response.json().catch(() => ({}));
-        throw new Error(errData.message || `Analysis failed (${response.status})`);
+        const msg = errData.message || `Analysis failed (${response.status})`;
+        const hint = errData.hint || '';
+        throw new Error(hint ? `${msg}||${hint}` : msg);
       }
 
       const data: AnalysisResult = await response.json();
@@ -77,10 +79,21 @@ export default function App() {
           {error && (
             <div className="w-full max-w-4xl mx-auto mt-6">
               <div className="bg-pe-red/10 border border-pe-red/30 rounded-xl p-4 text-center">
-                <p className="text-pe-red font-medium">{error}</p>
-                <p className="text-gray-400 text-sm mt-1">
-                  Check your API key or enable Demo Mode.
+                <p className="text-pe-red font-medium">{error.split('||')[0]}</p>
+                <p className="text-gray-400 text-sm mt-2">
+                  {error.split('||')[1] || 'Check your API key or enable Demo Mode.'}
                 </p>
+                {!demoMode && (
+                  <button
+                    onClick={() => {
+                      setDemoMode(true);
+                      setError(null);
+                    }}
+                    className="mt-3 text-sm px-4 py-2 rounded-lg border border-gold bg-gold/10 text-gold hover:bg-gold/20 transition-all"
+                  >
+                    Switch to Demo Mode
+                  </button>
+                )}
               </div>
             </div>
           )}

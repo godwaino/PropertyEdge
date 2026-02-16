@@ -123,10 +123,40 @@ Where:
     const analysis = JSON.parse(jsonMatch[0]);
     res.json(analysis);
   } catch (error: any) {
-    console.error('Analysis error:', error);
-    res.status(500).json({
+    console.error('Analysis error:', error?.status, error?.message);
+
+    let status = 500;
+    let message = 'An unexpected error occurred';
+
+    if (error?.status === 401) {
+      status = 401;
+      message = 'Invalid API key. Check your ANTHROPIC_API_KEY in the .env file.';
+    } else if (error?.status === 403) {
+      status = 403;
+      message = 'API key does not have permission. Check your Anthropic account and billing.';
+    } else if (error?.status === 429) {
+      status = 429;
+      message = 'Rate limited. Too many requests — please wait a moment and try again.';
+    } else if (error?.status === 400) {
+      status = 400;
+      message = 'Bad request to Anthropic API: ' + (error?.message || 'unknown error');
+    } else if (error?.status === 529 || error?.status === 503) {
+      status = 503;
+      message = 'Anthropic API is temporarily overloaded. Please try again in a minute.';
+    } else if (error?.code === 'ENOTFOUND' || error?.code === 'ECONNREFUSED' || error?.code === 'ETIMEDOUT') {
+      status = 503;
+      message = 'Cannot reach Anthropic API. Check your internet connection.';
+    } else if (!process.env.ANTHROPIC_API_KEY) {
+      status = 500;
+      message = 'No API key configured. Add ANTHROPIC_API_KEY to your .env file.';
+    } else if (error?.message) {
+      message = error.message;
+    }
+
+    res.status(status).json({
       error: 'Analysis failed',
-      message: error.message || 'An unexpected error occurred',
+      message,
+      hint: 'Try enabling Demo Mode to preview the app without an API key.',
     });
   }
 });
