@@ -128,6 +128,122 @@ interface PropertyRequest {
   leaseYears?: number;
 }
 
+// Helper: map property type string to our enum values
+function mapPropertyType(typeStr: string): string {
+  const t = typeStr.toLowerCase();
+  if (t.includes('flat') || t.includes('apartment') || t.includes('maisonette')) return 'flat';
+  if (t.includes('terraced')) return 'terraced';
+  if (t.includes('semi')) return 'semi-detached';
+  if (t.includes('detached')) return 'detached';
+  if (t.includes('bungalow')) return 'bungalow';
+  return 'flat';
+}
+
+// Helper: try to extract property data from HTML (PAGE_MODEL, og tags, meta tags)
+function extractFromHtml(html: string): Partial<PropertyRequest> {
+  const property: Partial<PropertyRequest> = {};
+
+  // Strategy 1: PAGE_MODEL JSON
+  const pageModelMatch = html.match(/window\.PAGE_MODEL\s*=\s*(\{[\s\S]*?\})\s*<\/script>/);
+  if (pageModelMatch) {
+    try {
+      const model = JSON.parse(pageModelMatch[1]);
+      const pd = model?.propertyData;
+      if (pd) {
+        property.address = pd.address?.displayAddress || '';
+        property.postcode = pd.address?.outcode && pd.address?.incode
+          ? `${pd.address.outcode} ${pd.address.incode}` : '';
+        property.askingPrice = pd.prices?.primaryPrice
+          ? Number(pd.prices.primaryPrice.replace(/[^0-9]/g, '')) : 0;
+        property.bedrooms = pd.bedrooms || 0;
+        property.sizeSqm = pd.sizings?.[0]?.minimumSize || pd.sizings?.[0]?.maximumSize || 0;
+        if (pd.sizings?.[0]?.unit === 'sqft' && property.sizeSqm) {
+          property.sizeSqm = Math.round(property.sizeSqm * 0.0929);
+        }
+        property.propertyType = mapPropertyType(pd.propertySubType || pd.propertyType || '');
+        const tenureStr = (pd.tenure?.tenureType || '').toLowerCase();
+        property.tenure = tenureStr.includes('freehold') ? 'freehold' : 'leasehold';
+      }
+    } catch { /* fall through */ }
+  }
+
+  // Strategy 2: Open Graph meta tags (often served even to bots)
+  if (!property.address) {
+    const ogTitle = html.match(/<meta\s+(?:property|name)="og:title"\s+content="([^"]+)"/i)?.[1]
+      || html.match(/content="([^"]+)"\s+(?:property|name)="og:title"/i)?.[1];
+    if (ogTitle) {
+      const addressMatch = ogTitle.match(/(?:for sale|to rent)\s+(?:in\s+)?(.+?)(?:\s*-\s*Rightmove|\s*\||$)/i);
+      if (addressMatch) property.address = addressMatch[1].trim();
+      const bedMatch = ogTitle.match(/(\d+)\s*bed/i);
+      if (bedMatch) property.bedrooms = Number(bedMatch[1]);
+      const typeMatch = ogTitle.match(/(flat|apartment|terraced|semi-detached|detached|bungalow|house|maisonette)/i);
+      if (typeMatch) property.propertyType = mapPropertyType(typeMatch[1]);
+    }
+  }
+
+  const ogDesc = html.match(/<meta\s+(?:property|name)="og:description"\s+content="([^"]+)"/i)?.[1]
+    || html.match(/content="([^"]+)"\s+(?:property|name)="og:description"/i)?.[1];
+  if (ogDesc) {
+    if (!property.askingPrice) {
+      const priceMatch = ogDesc.match(/£([\d,]+)/);
+      if (priceMatch) property.askingPrice = Number(priceMatch[1].replace(/,/g, ''));
+    }
+    if (!property.bedrooms) {
+      const bedMatch = ogDesc.match(/(\d+)\s*bed/i);
+      if (bedMatch) property.bedrooms = Number(bedMatch[1]);
+    }
+  }
+
+  // Strategy 3: <title> tag
+  if (!property.address) {
+    const titleMatch = html.match(/<title>([^<]+)<\/title>/i);
+    if (titleMatch) {
+      const title = titleMatch[1];
+      const addressMatch = title.match(/(?:for sale|to rent)\s+(?:in\s+)?(.+?)(?:\s*-\s*Rightmove|\s*\|)/i);
+      if (addressMatch) property.address = addressMatch[1].trim();
+      if (!property.bedrooms) {
+        const bedMatch = title.match(/(\d+)\s*bed/i);
+        if (bedMatch) property.bedrooms = Number(bedMatch[1]);
+      }
+    }
+  }
+
+  // Strategy 4: JSON-LD structured data
+  const jsonLdMatch = html.match(/<script\s+type="application\/ld\+json">([\s\S]*?)<\/script>/i);
+  if (jsonLdMatch) {
+    try {
+      const ld = JSON.parse(jsonLdMatch[1]);
+      if (!property.address && ld.name) property.address = ld.name;
+      if (!property.askingPrice && ld.offers?.price) property.askingPrice = Number(ld.offers.price);
+    } catch { /* ignore */ }
+  }
+
+  // Strategy 5: generic price/postcode patterns
+  if (!property.askingPrice) {
+    const priceMatch = html.match(/"price"\s*:\s*"([^"]+)"/) || html.match(/£([\d,]+)/);
+    if (priceMatch) property.askingPrice = Number(priceMatch[1].replace(/[^0-9]/g, ''));
+  }
+  if (!property.postcode) {
+    const postcodeMatch = html.match(/([A-Z]{1,2}\d[A-Z\d]?\s*\d[A-Z]{2})/i);
+    if (postcodeMatch) property.postcode = postcodeMatch[1];
+  }
+
+  return property;
+}
+
+// Helper: extract info from the Rightmove URL slug itself
+function extractFromUrl(url: string): Partial<PropertyRequest> {
+  const property: Partial<PropertyRequest> = {};
+  // URLs like: /properties/154372691#/?channel=RES_BUY
+  // or: /properties/2-bedroom-flat-for-sale-in-some-address-154372691
+  const slug = decodeURIComponent(url).toLowerCase();
+  const bedMatch = slug.match(/(\d+)-bed(?:room)?/);
+  if (bedMatch) property.bedrooms = Number(bedMatch[1]);
+  const typeMatch = slug.match(/(flat|apartment|terraced|semi-detached|detached|bungalow|house|maisonette)/);
+  if (typeMatch) property.propertyType = mapPropertyType(typeMatch[1]);
+  return property;
+}
+
 // Rightmove listing scraper endpoint
 app.post('/api/rightmove', rateLimit, async (req, res) => {
   const { url } = req.body;
@@ -137,97 +253,87 @@ app.post('/api/rightmove', rateLimit, async (req, res) => {
     return;
   }
 
-  // Validate it's a Rightmove URL
   if (!/^https?:\/\/(www\.)?rightmove\.co\.uk\/propert/i.test(url)) {
     res.status(400).json({ error: 'Invalid URL', message: 'Please provide a valid Rightmove property URL.' });
     return;
   }
 
   try {
-    const response = await fetch(url, {
-      headers: {
+    // Extract what we can from the URL itself
+    const urlData = extractFromUrl(url);
+    let htmlData: Partial<PropertyRequest> = {};
+
+    // Try fetching the page with multiple strategies
+    const fetchStrategies: Record<string, string>[] = [
+      // Strategy A: Googlebot (sites serve full content for SEO)
+      {
+        'User-Agent': 'Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)',
+        'Accept': 'text/html',
+      },
+      // Strategy B: Regular browser
+      {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
         'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
         'Accept-Language': 'en-GB,en;q=0.9',
       },
-    });
+      // Strategy C: curl-like (minimal)
+      {
+        'User-Agent': 'curl/8.0',
+        'Accept': '*/*',
+      },
+    ];
 
-    if (!response.ok) {
-      throw new Error(`Rightmove returned ${response.status}`);
-    }
-
-    const html = await response.text();
-
-    // Extract PAGE_MODEL JSON from the page script
-    const pageModelMatch = html.match(/window\.PAGE_MODEL\s*=\s*(\{[\s\S]*?\})\s*<\/script>/);
-
-    let property: Partial<PropertyRequest> = {};
-
-    if (pageModelMatch) {
+    for (const headers of fetchStrategies) {
       try {
-        const model = JSON.parse(pageModelMatch[1]);
-        const pd = model?.propertyData;
-        if (pd) {
-          property.address = pd.address?.displayAddress || '';
-          property.postcode = pd.address?.outcode && pd.address?.incode
-            ? `${pd.address.outcode} ${pd.address.incode}`
-            : '';
-          property.askingPrice = pd.prices?.primaryPrice
-            ? Number(pd.prices.primaryPrice.replace(/[^0-9]/g, ''))
-            : 0;
-          property.bedrooms = pd.bedrooms || 0;
-          property.sizeSqm = pd.sizings?.[0]?.minimumSize || pd.sizings?.[0]?.maximumSize || 0;
-          // Convert sq ft to sqm if needed
-          if (pd.sizings?.[0]?.unit === 'sqft' && property.sizeSqm) {
-            property.sizeSqm = Math.round(property.sizeSqm * 0.0929);
-          }
-          // Map property type
-          const typeStr = (pd.propertySubType || pd.propertyType || '').toLowerCase();
-          if (typeStr.includes('flat') || typeStr.includes('apartment') || typeStr.includes('maisonette')) {
-            property.propertyType = 'flat';
-          } else if (typeStr.includes('terraced')) {
-            property.propertyType = 'terraced';
-          } else if (typeStr.includes('semi')) {
-            property.propertyType = 'semi-detached';
-          } else if (typeStr.includes('detached')) {
-            property.propertyType = 'detached';
-          } else if (typeStr.includes('bungalow')) {
-            property.propertyType = 'bungalow';
-          } else {
-            property.propertyType = 'flat';
-          }
-          // Tenure
-          const tenureStr = (pd.tenure?.tenureType || '').toLowerCase();
-          property.tenure = tenureStr.includes('freehold') ? 'freehold' : 'leasehold';
-        }
+        const response = await fetch(url, { headers, redirect: 'follow' });
+        if (!response.ok) continue;
+
+        const html = await response.text();
+        htmlData = extractFromHtml(html);
+
+        // If we got meaningful data, stop trying
+        if (htmlData.address || htmlData.askingPrice) break;
       } catch {
-        // PAGE_MODEL parse failed, fall through to HTML parsing
+        continue;
       }
     }
 
-    // Fallback: parse from HTML meta tags and visible text
-    if (!property.address) {
-      const titleMatch = html.match(/<title>([^<]+)<\/title>/i);
-      if (titleMatch) {
-        // Rightmove titles are like "2 bed flat for sale in Address, Postcode - Rightmove"
-        const title = titleMatch[1];
-        const addressMatch = title.match(/(?:for sale|to rent)\s+(?:in\s+)?(.+?)(?:\s*-\s*Rightmove|\s*\|)/i);
-        if (addressMatch) property.address = addressMatch[1].trim();
-        const bedMatch = title.match(/(\d+)\s*bed/i);
-        if (bedMatch) property.bedrooms = Number(bedMatch[1]);
-      }
-    }
+    // Merge: HTML data takes priority, URL data fills gaps
+    const property: Partial<PropertyRequest> = {
+      ...urlData,
+      ...Object.fromEntries(Object.entries(htmlData).filter(([, v]) => v)),
+    };
 
-    if (!property.askingPrice) {
-      const priceMatch = html.match(/"price":"([^"]+)"/);
-      if (priceMatch) {
-        property.askingPrice = Number(priceMatch[1].replace(/[^0-9]/g, ''));
+    // If scraping got nothing useful, try Claude as a last resort
+    if (!property.address && !property.askingPrice && anthropic) {
+      try {
+        const msg = await anthropic.messages.create({
+          model: 'claude-sonnet-4-20250514',
+          max_tokens: 512,
+          messages: [{
+            role: 'user',
+            content: `I have a Rightmove property listing URL: ${url}
+Extract any property details you can determine from the URL structure alone (property ID, area, bedrooms, property type).
+Respond with ONLY valid JSON: {"address":"","postcode":"","askingPrice":0,"bedrooms":0,"propertyType":"flat","tenure":"freehold","sizeSqm":0,"yearBuilt":2000}
+Fill in what you can infer, leave defaults for unknowns. Do not make up specific prices or addresses you aren't confident about.`,
+          }],
+        });
+        const text = msg.content[0];
+        if (text.type === 'text') {
+          const jsonMatch = text.text.match(/\{[\s\S]*\}/);
+          if (jsonMatch) {
+            const aiData = JSON.parse(jsonMatch[0]);
+            // Only use AI data for fields we don't already have
+            for (const [key, value] of Object.entries(aiData)) {
+              if (value && !(property as any)[key]) {
+                (property as any)[key] = value;
+              }
+            }
+          }
+        }
+      } catch (aiErr: any) {
+        console.error('Claude extraction fallback error:', aiErr?.message);
       }
-    }
-
-    if (!property.postcode) {
-      const postcodeMatch = html.match(/([A-Z]{1,2}\d[A-Z\d]?\s*\d[A-Z]{2})/i);
-      if (postcodeMatch) property.postcode = postcodeMatch[1];
     }
 
     // Set defaults for missing fields
@@ -240,7 +346,8 @@ app.post('/api/rightmove', rateLimit, async (req, res) => {
     if (!property.address && !property.askingPrice) {
       res.status(422).json({
         error: 'Could not extract details',
-        message: 'Rightmove may have blocked the request. Please enter the details manually.',
+        message: 'Rightmove blocked all attempts. Please enter the property details manually.',
+        partial: property,
       });
       return;
     }

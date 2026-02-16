@@ -26,22 +26,27 @@ export default function PropertyForm({ onSubmit, isLoading }: Props) {
         body: JSON.stringify({ url: rightmoveUrl.trim() }),
       });
 
+      const json = await response.json();
+
+      // Even on error responses, there may be partial data
+      const data = response.ok ? json : json.partial || {};
       if (!response.ok) {
-        const err = await response.json().catch(() => ({}));
-        throw new Error(err.message || 'Failed to fetch listing');
+        setFetchError(json.message || 'Some fields could not be extracted. Please fill in the rest manually.');
       }
 
-      const data = await response.json();
       const form = formRef.current;
       if (!form) return;
 
-      // Auto-fill form fields
-      if (data.address) (form.elements.namedItem('address') as HTMLInputElement).value = data.address;
-      if (data.postcode) (form.elements.namedItem('postcode') as HTMLInputElement).value = data.postcode;
-      if (data.askingPrice) (form.elements.namedItem('askingPrice') as HTMLInputElement).value = data.askingPrice;
-      if (data.bedrooms) (form.elements.namedItem('bedrooms') as HTMLInputElement).value = data.bedrooms;
-      if (data.sizeSqm) (form.elements.namedItem('sizeSqm') as HTMLInputElement).value = data.sizeSqm;
-      if (data.yearBuilt) (form.elements.namedItem('yearBuilt') as HTMLInputElement).value = data.yearBuilt;
+      // Auto-fill any fields we got
+      const fillField = (name: string, value: any) => {
+        if (value) (form.elements.namedItem(name) as HTMLInputElement).value = String(value);
+      };
+      fillField('address', data.address);
+      fillField('postcode', data.postcode);
+      fillField('askingPrice', data.askingPrice);
+      fillField('bedrooms', data.bedrooms);
+      fillField('sizeSqm', data.sizeSqm);
+      fillField('yearBuilt', data.yearBuilt);
 
       if (data.propertyType) {
         (form.elements.namedItem('propertyType') as HTMLSelectElement).value = data.propertyType;
