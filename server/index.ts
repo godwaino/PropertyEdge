@@ -1,15 +1,20 @@
 import express from 'express';
 import cors from 'cors';
+import path from 'path';
 import Anthropic from '@anthropic-ai/sdk';
 import dotenv from 'dotenv';
 
 dotenv.config({ path: '../.env' });
 
 const app = express();
-const PORT = process.env.PORT || 3001;
+const PORT = process.env.PORT || 8080;
 
 app.use(cors());
 app.use(express.json());
+
+// Serve the built React frontend
+const clientDist = path.join(__dirname, '..', 'client', 'dist');
+app.use(express.static(clientDist));
 
 const anthropic = new Anthropic({
   apiKey: process.env.ANTHROPIC_API_KEY,
@@ -173,6 +178,11 @@ app.get('/api/health', (_req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
 
-app.listen(PORT, () => {
-  console.log(`Property Edge AI server running on port ${PORT}`);
+// Serve React app for all non-API routes
+app.get('*', (_req, res) => {
+  res.sendFile(path.join(clientDist, 'index.html'));
+});
+
+app.listen(Number(PORT), '0.0.0.0', () => {
+  console.log(`Property Edge AI server running on http://0.0.0.0:${PORT}`);
 });
