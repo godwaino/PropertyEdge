@@ -8,36 +8,35 @@ interface Props {
 
 export default function PropertyForm({ onSubmit, isLoading }: Props) {
   const [tenure, setTenure] = useState('leasehold');
-  const [rightmoveUrl, setRightmoveUrl] = useState('');
-  const [isFetching, setIsFetching] = useState(false);
-  const [fetchError, setFetchError] = useState<string | null>(null);
+  const [listingText, setListingText] = useState('');
+  const [isExtracting, setIsExtracting] = useState(false);
+  const [extractError, setExtractError] = useState<string | null>(null);
+  const [showImport, setShowImport] = useState(false);
   const formRef = useRef<HTMLFormElement>(null);
 
-  const handleFetchRightmove = async () => {
-    if (!rightmoveUrl.trim()) return;
+  const handleExtract = async () => {
+    if (!listingText.trim()) return;
 
-    setIsFetching(true);
-    setFetchError(null);
+    setIsExtracting(true);
+    setExtractError(null);
 
     try {
-      const response = await fetch('/api/rightmove', {
+      const response = await fetch('/api/extract-listing', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ url: rightmoveUrl.trim() }),
+        body: JSON.stringify({ text: listingText.trim() }),
       });
 
-      const json = await response.json();
+      const data = await response.json();
 
-      // Even on error responses, there may be partial data
-      const data = response.ok ? json : json.partial || {};
       if (!response.ok) {
-        setFetchError(json.message || 'Some fields could not be extracted. Please fill in the rest manually.');
+        throw new Error(data.message || 'Could not extract details');
       }
 
       const form = formRef.current;
       if (!form) return;
 
-      // Auto-fill any fields we got
+      // Auto-fill form fields
       const fillField = (name: string, value: any) => {
         if (value) (form.elements.namedItem(name) as HTMLInputElement).value = String(value);
       };
@@ -55,10 +54,13 @@ export default function PropertyForm({ onSubmit, isLoading }: Props) {
       if (data.tenure) {
         setTenure(data.tenure);
       }
+
+      setShowImport(false);
+      setListingText('');
     } catch (err: any) {
-      setFetchError(err.message || 'Could not fetch listing');
+      setExtractError(err.message || 'Could not extract details');
     } finally {
-      setIsFetching(false);
+      setIsExtracting(false);
     }
   };
 
@@ -96,28 +98,43 @@ export default function PropertyForm({ onSubmit, isLoading }: Props) {
       onSubmit={handleSubmit}
       className="w-full max-w-4xl mx-auto bg-navy-card border border-gray-800 rounded-2xl p-6"
     >
-      {/* Rightmove URL import */}
+      {/* Import from listing toggle */}
       <div className="mb-5">
-        <label className={labelClass}>Import from Rightmove</label>
-        <div className="flex gap-2">
-          <input
-            type="url"
-            value={rightmoveUrl}
-            onChange={(e) => setRightmoveUrl(e.target.value)}
-            placeholder="Paste Rightmove listing URL..."
-            className={`${inputClass} flex-1`}
-          />
-          <button
-            type="button"
-            onClick={handleFetchRightmove}
-            disabled={isFetching || !rightmoveUrl.trim()}
-            className="px-4 py-2 rounded-lg text-sm font-medium bg-cyan/10 border border-cyan text-cyan hover:bg-cyan/20 disabled:opacity-40 disabled:cursor-not-allowed transition-all whitespace-nowrap"
-          >
-            {isFetching ? 'Fetching...' : 'Auto-fill'}
-          </button>
-        </div>
-        {fetchError && (
-          <p className="text-pe-red text-xs mt-1">{fetchError}</p>
+        <button
+          type="button"
+          onClick={() => setShowImport(!showImport)}
+          className="text-sm text-cyan hover:text-cyan/80 transition-colors flex items-center gap-1.5"
+        >
+          <span className={`inline-block transition-transform ${showImport ? 'rotate-90' : ''}`}>&#9654;</span>
+          Paste Rightmove / Zoopla listing to auto-fill
+        </button>
+
+        {showImport && (
+          <div className="mt-3">
+            <p className="text-gray-500 text-xs mb-2">
+              Copy the listing text from Rightmove or Zoopla (title, price, description) and paste it below.
+            </p>
+            <textarea
+              value={listingText}
+              onChange={(e) => setListingText(e.target.value)}
+              placeholder={"e.g. 2 bed flat for sale\n£285,000\nDeansgate, Manchester, M3 4LQ\n2 bedrooms, 85 sqm, leasehold..."}
+              rows={5}
+              className={`${inputClass} resize-none`}
+            />
+            <div className="flex items-center gap-3 mt-2">
+              <button
+                type="button"
+                onClick={handleExtract}
+                disabled={isExtracting || !listingText.trim()}
+                className="px-4 py-2 rounded-lg text-sm font-medium bg-cyan/10 border border-cyan text-cyan hover:bg-cyan/20 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
+              >
+                {isExtracting ? 'Extracting...' : 'Extract & Auto-fill'}
+              </button>
+              {extractError && (
+                <p className="text-pe-red text-xs">{extractError}</p>
+              )}
+            </div>
+          </div>
         )}
       </div>
 
