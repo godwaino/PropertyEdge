@@ -33,6 +33,16 @@ const defaults: FormFields = {
   leaseYears: '999',
 };
 
+function formatPrice(value: string): string {
+  const num = value.replace(/[^0-9]/g, '');
+  if (!num) return '';
+  return Number(num).toLocaleString('en-GB');
+}
+
+function rawPrice(formatted: string): string {
+  return formatted.replace(/[^0-9]/g, '');
+}
+
 export default function PropertyForm({ onSubmit, isLoading, autoOpenImport }: Props) {
   const [fields, setFields] = useState<FormFields>(defaults);
   const [tenure, setTenure] = useState('leasehold');
@@ -40,19 +50,37 @@ export default function PropertyForm({ onSubmit, isLoading, autoOpenImport }: Pr
   const [isExtracting, setIsExtracting] = useState(false);
   const [extractError, setExtractError] = useState<string | null>(null);
   const [showImport, setShowImport] = useState(false);
+  const [showOptional, setShowOptional] = useState(true);
+  const [errors, setErrors] = useState<Partial<Record<keyof FormFields, string>>>({});
 
-  // Open import panel when hero CTA is clicked
   useEffect(() => {
     if (autoOpenImport) setShowImport(true);
   }, [autoOpenImport]);
 
   const setField = (name: keyof FormFields, value: string) => {
     setFields((prev) => ({ ...prev, [name]: value }));
+    // Clear error on edit
+    if (errors[name]) setErrors((prev) => ({ ...prev, [name]: undefined }));
+  };
+
+  const validate = (): boolean => {
+    const e: Partial<Record<keyof FormFields, string>> = {};
+    if (!fields.address.trim()) e.address = 'Required';
+    if (!fields.postcode.trim()) e.postcode = 'Required';
+    else if (!/^[A-Z]{1,2}\d[A-Z\d]?\s*\d[A-Z]{2}$/i.test(fields.postcode.trim()))
+      e.postcode = 'Invalid UK postcode format';
+    const price = Number(rawPrice(fields.askingPrice));
+    if (!price || price < 1000) e.askingPrice = 'Enter a valid price';
+    if (!fields.bedrooms || Number(fields.bedrooms) < 0) e.bedrooms = 'Required';
+    const yb = Number(fields.yearBuilt);
+    if (fields.yearBuilt && (yb < 1500 || yb > new Date().getFullYear() + 2))
+      e.yearBuilt = '1500-' + (new Date().getFullYear() + 2);
+    setErrors(e);
+    return Object.keys(e).length === 0;
   };
 
   const handleExtract = async () => {
     if (!listingText.trim()) return;
-
     setIsExtracting(true);
     setExtractError(null);
 
@@ -62,14 +90,9 @@ export default function PropertyForm({ onSubmit, isLoading, autoOpenImport }: Pr
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ text: listingText.trim() }),
       });
-
       const data = await response.json();
+      if (!response.ok) throw new Error(data.message || 'Could not extract details');
 
-      if (!response.ok) {
-        throw new Error(data.message || 'Could not extract details');
-      }
-
-      // Update all fields that have real values (not 0 or empty)
       setFields((prev) => ({
         ...prev,
         ...(data.address ? { address: data.address } : {}),
@@ -83,11 +106,7 @@ export default function PropertyForm({ onSubmit, isLoading, autoOpenImport }: Pr
         ...(data.groundRent ? { groundRent: String(data.groundRent) } : {}),
         ...(data.leaseYears ? { leaseYears: String(data.leaseYears) } : {}),
       }));
-
-      if (data.tenure) {
-        setTenure(data.tenure);
-      }
-
+      if (data.tenure) setTenure(data.tenure);
       setShowImport(false);
       setListingText('');
     } catch (err: any) {
@@ -99,15 +118,16 @@ export default function PropertyForm({ onSubmit, isLoading, autoOpenImport }: Pr
 
   const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
+    if (!validate()) return;
 
     const property: PropertyInput = {
       address: fields.address,
       postcode: fields.postcode,
-      askingPrice: Number(fields.askingPrice),
+      askingPrice: Number(rawPrice(fields.askingPrice)),
       propertyType: fields.propertyType,
       bedrooms: Number(fields.bedrooms),
-      sizeSqm: Number(fields.sizeSqm),
-      yearBuilt: Number(fields.yearBuilt),
+      sizeSqm: Number(fields.sizeSqm) || 0,
+      yearBuilt: Number(fields.yearBuilt) || 2000,
       tenure,
     };
 
@@ -122,7 +142,11 @@ export default function PropertyForm({ onSubmit, isLoading, autoOpenImport }: Pr
 
   const inputClass =
     'w-full bg-navy-light border border-gray-700 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-cyan transition-colors';
+  const errorInputClass =
+    'w-full bg-navy-light border border-pe-red/50 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-pe-red transition-colors';
   const labelClass = 'block text-gray-400 text-xs mb-1';
+  const helperClass = 'text-gray-600 text-[11px] mt-0.5';
+  const errorClass = 'text-pe-red text-[11px] mt-0.5';
 
   return (
     <form
@@ -144,13 +168,13 @@ export default function PropertyForm({ onSubmit, isLoading, autoOpenImport }: Pr
         {showImport && (
           <div className="mt-3">
             <p className="text-gray-500 text-xs mb-2">
-              Copy the listing text from Rightmove or Zoopla (title, price, description) and paste it below.
+              Copy the listing text (title, price, description) and paste it below.
             </p>
             <textarea
               value={listingText}
               onChange={(e) => setListingText(e.target.value)}
               placeholder={"e.g. 2 bed flat for sale\n£285,000\nDeansgate, Manchester, M3 4LQ\n2 bedrooms, 85 sqm, leasehold..."}
-              rows={5}
+              rows={4}
               className={`${inputClass} resize-none`}
             />
             <div className="flex items-center gap-3 mt-2">
@@ -162,9 +186,7 @@ export default function PropertyForm({ onSubmit, isLoading, autoOpenImport }: Pr
               >
                 {isExtracting ? 'Extracting...' : 'Extract & Auto-fill'}
               </button>
-              {extractError && (
-                <p className="text-pe-red text-xs">{extractError}</p>
-              )}
+              {extractError && <p className="text-pe-red text-xs">{extractError}</p>}
             </div>
           </div>
         )}
@@ -172,27 +194,68 @@ export default function PropertyForm({ onSubmit, isLoading, autoOpenImport }: Pr
 
       <div className="border-t border-gray-800 mb-5" />
 
-      <h2 className="text-lg font-semibold text-white mb-4">Property Details</h2>
+      {/* Section A: Core Details */}
+      <h2 className="text-sm font-semibold text-white mb-3 uppercase tracking-wider">
+        Core Details
+      </h2>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div className="md:col-span-2">
           <label className={labelClass}>Address</label>
-          <input name="address" className={inputClass} value={fields.address} onChange={(e) => setField('address', e.target.value)} required />
+          <input
+            className={errors.address ? errorInputClass : inputClass}
+            value={fields.address}
+            onChange={(e) => setField('address', e.target.value)}
+          />
+          {errors.address && <p className={errorClass}>{errors.address}</p>}
         </div>
 
         <div>
           <label className={labelClass}>Postcode</label>
-          <input name="postcode" className={inputClass} value={fields.postcode} onChange={(e) => setField('postcode', e.target.value)} required />
+          <input
+            className={errors.postcode ? errorInputClass : inputClass}
+            value={fields.postcode}
+            onChange={(e) => setField('postcode', e.target.value.toUpperCase())}
+            placeholder="e.g. SW1A 1AA"
+          />
+          {errors.postcode && <p className={errorClass}>{errors.postcode}</p>}
         </div>
 
         <div>
-          <label className={labelClass}>Asking Price (&pound;)</label>
-          <input name="askingPrice" type="number" className={inputClass} value={fields.askingPrice} onChange={(e) => setField('askingPrice', e.target.value)} required />
+          <label className={labelClass}>Asking Price</label>
+          <div className="relative">
+            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 text-sm">&pound;</span>
+            <input
+              type="text"
+              inputMode="numeric"
+              className={`${errors.askingPrice ? errorInputClass : inputClass} pl-7`}
+              value={formatPrice(fields.askingPrice)}
+              onChange={(e) => setField('askingPrice', rawPrice(e.target.value))}
+            />
+          </div>
+          {errors.askingPrice && <p className={errorClass}>{errors.askingPrice}</p>}
+        </div>
+
+        <div>
+          <label className={labelClass}>Bedrooms</label>
+          <input
+            type="number"
+            className={errors.bedrooms ? errorInputClass : inputClass}
+            value={fields.bedrooms}
+            onChange={(e) => setField('bedrooms', e.target.value)}
+            min={0}
+            max={20}
+          />
+          {errors.bedrooms && <p className={errorClass}>{errors.bedrooms}</p>}
         </div>
 
         <div>
           <label className={labelClass}>Property Type</label>
-          <select name="propertyType" className={inputClass} value={fields.propertyType} onChange={(e) => setField('propertyType', e.target.value)}>
+          <select
+            className={inputClass}
+            value={fields.propertyType}
+            onChange={(e) => setField('propertyType', e.target.value)}
+          >
             <option value="flat">Flat / Apartment</option>
             <option value="terraced">Terraced House</option>
             <option value="semi-detached">Semi-Detached</option>
@@ -200,57 +263,88 @@ export default function PropertyForm({ onSubmit, isLoading, autoOpenImport }: Pr
             <option value="bungalow">Bungalow</option>
           </select>
         </div>
+      </div>
 
-        <div>
-          <label className={labelClass}>Bedrooms</label>
-          <input name="bedrooms" type="number" className={inputClass} value={fields.bedrooms} onChange={(e) => setField('bedrooms', e.target.value)} required />
-        </div>
+      {/* Section B: Optional Refinements */}
+      <div className="mt-6">
+        <button
+          type="button"
+          onClick={() => setShowOptional(!showOptional)}
+          className="text-xs text-gray-400 hover:text-gray-300 transition-colors flex items-center gap-1.5"
+        >
+          <span className={`inline-block transition-transform ${showOptional ? 'rotate-90' : ''}`}>&#9654;</span>
+          Optional refinements
+          <span className="text-gray-600 ml-1">(approx is fine)</span>
+        </button>
 
-        <div>
-          <label className={labelClass}>Size (sqm)</label>
-          <input name="sizeSqm" type="number" className={inputClass} value={fields.sizeSqm} onChange={(e) => setField('sizeSqm', e.target.value)} required />
-        </div>
+        {showOptional && (
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-3">
+            <div>
+              <label className={labelClass}>Size (sqm)</label>
+              <input
+                type="number"
+                className={inputClass}
+                value={fields.sizeSqm}
+                onChange={(e) => setField('sizeSqm', e.target.value)}
+                placeholder="Leave blank if unknown"
+              />
+              <p className={helperClass}>Approx is fine</p>
+            </div>
 
-        <div>
-          <label className={labelClass}>Year Built</label>
-          <input name="yearBuilt" type="number" className={inputClass} value={fields.yearBuilt} onChange={(e) => setField('yearBuilt', e.target.value)} required />
-        </div>
+            <div>
+              <label className={labelClass}>Year Built</label>
+              <input
+                type="number"
+                className={errors.yearBuilt ? errorInputClass : inputClass}
+                value={fields.yearBuilt}
+                onChange={(e) => setField('yearBuilt', e.target.value)}
+                placeholder="e.g. 1990"
+              />
+              {errors.yearBuilt ? (
+                <p className={errorClass}>{errors.yearBuilt}</p>
+              ) : (
+                <p className={helperClass}>Estimate OK</p>
+              )}
+            </div>
 
-        <div className="md:col-span-2">
-          <label className={labelClass}>Tenure</label>
-          <div className="flex gap-4 mt-1">
-            {['leasehold', 'freehold'].map((t) => (
-              <button
-                key={t}
-                type="button"
-                onClick={() => setTenure(t)}
-                className={`px-4 py-2 rounded-lg text-sm border transition-all ${
-                  tenure === t
-                    ? 'border-cyan bg-cyan/10 text-cyan'
-                    : 'border-gray-700 text-gray-400 hover:border-gray-500'
-                }`}
-              >
-                {t.charAt(0).toUpperCase() + t.slice(1)}
-              </button>
-            ))}
+            <div>
+              <label className={labelClass}>Tenure</label>
+              <div className="flex gap-2 mt-0.5">
+                {(['leasehold', 'freehold'] as const).map((t) => (
+                  <button
+                    key={t}
+                    type="button"
+                    onClick={() => setTenure(t)}
+                    className={`flex-1 px-3 py-2 rounded-lg text-sm border transition-all ${
+                      tenure === t
+                        ? 'border-cyan bg-cyan/10 text-cyan'
+                        : 'border-gray-700 text-gray-400 hover:border-gray-500'
+                    }`}
+                  >
+                    {t.charAt(0).toUpperCase() + t.slice(1)}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {tenure === 'leasehold' && (
+              <>
+                <div>
+                  <label className={labelClass}>Service Charge (&pound;/yr)</label>
+                  <input type="number" className={inputClass} value={fields.serviceCharge} onChange={(e) => setField('serviceCharge', e.target.value)} />
+                  <p className={helperClass}>Leave blank if unknown</p>
+                </div>
+                <div>
+                  <label className={labelClass}>Ground Rent (&pound;/yr)</label>
+                  <input type="number" className={inputClass} value={fields.groundRent} onChange={(e) => setField('groundRent', e.target.value)} />
+                </div>
+                <div>
+                  <label className={labelClass}>Lease Remaining (yrs)</label>
+                  <input type="number" className={inputClass} value={fields.leaseYears} onChange={(e) => setField('leaseYears', e.target.value)} />
+                </div>
+              </>
+            )}
           </div>
-        </div>
-
-        {tenure === 'leasehold' && (
-          <>
-            <div>
-              <label className={labelClass}>Service Charge (&pound;/yr)</label>
-              <input name="serviceCharge" type="number" className={inputClass} value={fields.serviceCharge} onChange={(e) => setField('serviceCharge', e.target.value)} />
-            </div>
-            <div>
-              <label className={labelClass}>Ground Rent (&pound;/yr)</label>
-              <input name="groundRent" type="number" className={inputClass} value={fields.groundRent} onChange={(e) => setField('groundRent', e.target.value)} />
-            </div>
-            <div>
-              <label className={labelClass}>Lease Remaining (years)</label>
-              <input name="leaseYears" type="number" className={inputClass} value={fields.leaseYears} onChange={(e) => setField('leaseYears', e.target.value)} />
-            </div>
-          </>
         )}
       </div>
 
@@ -259,8 +353,13 @@ export default function PropertyForm({ onSubmit, isLoading, autoOpenImport }: Pr
         disabled={isLoading}
         className="mt-6 w-full py-3 rounded-xl font-semibold text-navy bg-cyan hover:bg-cyan/90 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
       >
-        {isLoading ? 'Analyzing...' : 'Analyze Property'}
+        {isLoading ? 'Analysing...' : 'Analyse Property'}
       </button>
+
+      {/* Trust cue */}
+      <p className="mt-2 text-center text-gray-600 text-[11px]">
+        Uses HM Land Registry sold prices where available
+      </p>
     </form>
   );
 }

@@ -439,9 +439,9 @@ app.post('/api/analyze', rateLimit, async (req, res) => {
         ? `\n- Service charge: £${property.serviceCharge}/yr, Ground rent: £${property.groundRent}/yr, Lease remaining: ${property.leaseYears} years`
         : '';
 
-    const prompt = `You are a UK property valuation expert. You have access to REAL Land Registry sold price data below.
+    const prompt = `You are a UK property valuation expert and buyer's negotiation advisor. You have access to REAL Land Registry sold price data below.
 
-Your task: determine the fair market value of this property. You do NOT know the asking price — value it independently.
+Your task: determine the fair market value of this property, then advise the buyer on negotiation strategy. You do NOT know the asking price — value it independently.
 
 Property Details:
 - Address: ${property.address}, ${property.postcode}
@@ -449,23 +449,30 @@ Property Details:
 - Year Built: ${property.yearBuilt}
 - Tenure: ${property.tenure}${leaseholdInfo}
 ${comparablesText}
-VALUATION METHODOLOGY — you must follow these steps:
+VALUATION METHODOLOGY:
 1. ${comparables.length > 0
       ? 'USE THE REAL COMPARABLE SALES DATA ABOVE as your primary evidence. Identify the most similar properties and derive your valuation from their sold prices.'
       : 'No Land Registry data was available for this postcode. Use your knowledge of UK property prices for this area to estimate.'}
 2. Calculate a £/sqm rate based on the comparable sales data (or your knowledge if no data).
 3. Apply adjustments for: number of bedrooms, year built, tenure, condition, lease length, service charges.
 4. Your valuation MUST be derived from evidence, not guesswork.
-5. Confidence: 5-10% for well-evidenced valuations with good comparables, 10-20% if limited data.
+5. Confidence: 5-10% for well-evidenced valuations, 10-20% if limited data.
+
+NEGOTIATION STRATEGY:
+- Suggest an offer range (low = aggressive but justified, high = fair market)
+- Set a walk-away price (the most a buyer should pay)
+- Provide brief reasoning for the negotiation range
 
 Also analyze:
-- Red flags: serious issues a buyer should know about (with estimated financial impact >£5,000)
+- Red flags: serious issues with financial impact >£5,000
 - Warnings: moderate concerns (£1,000-£5,000 impact)
 - Positives: features that add value or reduce risk
 
 You MUST respond with ONLY valid JSON in this exact format, no other text:
 {
-  "valuation": {"amount": 287500, "confidence": 8.5, "basis": "Based on 12 Land Registry sales in M3: similar 2-bed flats sold for £270k-£310k. At £3,350/sqm for 85sqm, adjusted for year built."},
+  "valuation": {"amount": 287500, "confidence": 8.5, "basis": "Based on 12 Land Registry sales in M3: similar 2-bed flats sold for £270k-£310k."},
+  "summary": "Fair deal at £287k — in line with recent 2-bed flat sales in M3, but service charges are high.",
+  "negotiation": {"offer_low": 270000, "offer_high": 285000, "walk_away": 300000, "reasoning": "Comps support £280-290k. Open at £270k citing higher-than-average service charges, aim for £285k."},
   "comparables_used": 12,
   "red_flags": [{"title": "Issue", "description": "Detailed explanation", "impact": 12000}],
   "warnings": [{"title": "Warning", "description": "Detailed explanation", "impact": 3000}],
@@ -474,9 +481,11 @@ You MUST respond with ONLY valid JSON in this exact format, no other text:
 
 Where:
 - valuation.amount is your independent fair market valuation in £
-- valuation.basis explains specifically which comparables/data informed the figure
-- comparables_used is the number of Land Registry sales used (0 if none available)
-- Include at least 2 items in each category`;
+- valuation.basis explains which comparables/data informed the figure
+- summary is ONE sentence: "Overall: [verdict] at £X because [top 2 reasons]"
+- negotiation.offer_low = aggressive opening offer, offer_high = fair offer, walk_away = absolute max
+- comparables_used is the number of Land Registry sales used (0 if none)
+- Include at least 2 items in each of red_flags, warnings, positives`;
 
     const message = await anthropic.messages.create({
       model: 'claude-sonnet-4-20250514',
@@ -496,6 +505,14 @@ Where:
     }
 
     const analysis = JSON.parse(jsonMatch[0]);
+
+    // Attach raw comparables for the frontend table
+    analysis.comparables = comparables.slice(0, 10).map((c: any) => ({
+      price: c.price,
+      date: c.date,
+      address: c.address,
+      propertyType: c.propertyType,
+    }));
 
     // Cache the valuation (keyed on property details, excludes asking price)
     valuationCache.set(cacheKey, { result: analysis, timestamp: Date.now() });
@@ -624,11 +641,32 @@ app.post('/api/demo', rateLimit, async (req, res) => {
   else if (savings < -price * 0.03) verdict = 'GOOD_DEAL';
   else verdict = 'FAIR';
 
+  // Negotiation range based on valuation
+  const offerLow = Math.round(valuation * 0.92 / 1000) * 1000;
+  const offerHigh = Math.round(valuation * 0.98 / 1000) * 1000;
+  const walkAway = Math.round(valuation * 1.05 / 1000) * 1000;
+
+  const verdictLabel = verdict === 'GOOD_DEAL' ? 'Good deal' : verdict === 'OVERPRICED' ? 'Overpriced' : 'Fair';
+  const summaryText = `${verdictLabel} at £${valuation.toLocaleString()} — ${comparablesUsed > 0 ? `based on ${comparablesUsed} recent Land Registry sales in ${property.postcode}` : 'estimated from area averages'}. ${savings > 0 ? 'Asking price is above our valuation.' : 'Asking price is in line with or below market value.'}`;
+
   res.json({
     valuation: { amount: valuation, confidence: comparables.length >= 3 ? 10 : 15, basis: basisText },
     verdict,
     savings,
+    summary: summaryText,
     comparables_used: comparablesUsed,
+    comparables: comparables.slice(0, 10).map(c => ({
+      price: c.price,
+      date: c.date,
+      address: c.address,
+      propertyType: c.propertyType,
+    })),
+    negotiation: {
+      offer_low: offerLow,
+      offer_high: offerHigh,
+      walk_away: walkAway,
+      reasoning: `Open at £${offerLow.toLocaleString()} (8% below valuation) citing any issues found. Aim for £${offerHigh.toLocaleString()}. Walk away above £${walkAway.toLocaleString()}. Demo mode — add API key for AI-tailored negotiation strategy.`,
+    },
     red_flags: [
       {
         title: 'Leasehold Ground Rent Escalation Risk',

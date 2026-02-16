@@ -14,30 +14,60 @@ export default function App() {
   const [demoMode, setDemoMode] = useState(false);
   const [apiKeyConfigured, setApiKeyConfigured] = useState(false);
   const [autoOpenImport, setAutoOpenImport] = useState(false);
+  const [isExtracting, setIsExtracting] = useState(false);
 
-  // Check if API key is configured on load
   useEffect(() => {
     fetch('/api/health')
       .then((r) => r.json())
       .then((data) => {
         setApiKeyConfigured(data.apiKeyConfigured);
-        // Auto-enable demo mode if no API key
-        if (!data.apiKeyConfigured) {
-          setDemoMode(true);
-        }
+        if (!data.apiKeyConfigured) setDemoMode(true);
       })
-      .catch(() => {
-        // Server not reachable, enable demo mode
-        setDemoMode(true);
-      });
+      .catch(() => setDemoMode(true));
   }, []);
 
   const handleAnalyseClick = () => {
     setAutoOpenImport(true);
-    // Smooth scroll to the form
     setTimeout(() => {
       document.getElementById('analyze')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }, 50);
+  };
+
+  // Extract listing text from hero paste box, then auto-fill form and scroll
+  const handleExtractListing = async (text: string) => {
+    setIsExtracting(true);
+    try {
+      const response = await fetch('/api/extract-listing', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text }),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.message);
+
+      // Build a PropertyInput from extracted data and auto-submit
+      const property: PropertyInput = {
+        address: data.address || '',
+        postcode: data.postcode || '',
+        askingPrice: data.askingPrice || 0,
+        propertyType: data.propertyType || 'flat',
+        bedrooms: data.bedrooms || 0,
+        sizeSqm: data.sizeSqm || 0,
+        yearBuilt: data.yearBuilt || 2000,
+        tenure: data.tenure || 'leasehold',
+        serviceCharge: data.serviceCharge || 0,
+        groundRent: data.groundRent || 0,
+        leaseYears: data.leaseYears || 0,
+      };
+
+      // Auto-analyse immediately after extraction
+      setIsExtracting(false);
+      handleAnalyze(property);
+    } catch {
+      setIsExtracting(false);
+      // Fallback: open the manual form
+      handleAnalyseClick();
+    }
   };
 
   const handleAnalyze = async (property: PropertyInput) => {
@@ -61,7 +91,6 @@ export default function App() {
 
       const data: AnalysisResult = await response.json();
 
-      // Brief delay in demo mode so loading animation is visible
       if (demoMode) {
         await new Promise((r) => setTimeout(r, 2000));
       }
@@ -78,7 +107,6 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-navy">
-      {/* Background gradient */}
       <div className="fixed inset-0 pointer-events-none">
         <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[800px] h-[600px] bg-cyan/5 rounded-full blur-[120px]" />
         <div className="absolute bottom-0 right-0 w-[400px] h-[400px] bg-gold/5 rounded-full blur-[100px]" />
@@ -87,7 +115,6 @@ export default function App() {
       <div className="relative z-10 pb-16">
         <Header />
 
-        {/* Demo mode toggle */}
         <div className="max-w-4xl mx-auto px-4 mb-2 flex justify-end items-center gap-2">
           {demoMode && !apiKeyConfigured && (
             <span className="text-gray-500 text-xs">No API key detected</span>
@@ -104,8 +131,12 @@ export default function App() {
           </button>
         </div>
 
-        {/* Hero — visible until results or loading */}
-        <Hero onAnalyseClick={handleAnalyseClick} visible={showHero} />
+        <Hero
+          onAnalyseClick={handleAnalyseClick}
+          onExtractListing={handleExtractListing}
+          visible={showHero}
+          isExtracting={isExtracting}
+        />
 
         <main className="px-4 mt-2">
           <PropertyForm
@@ -120,10 +151,7 @@ export default function App() {
                 <p className="text-pe-red font-medium">{error}</p>
                 {!demoMode && (
                   <button
-                    onClick={() => {
-                      setDemoMode(true);
-                      setError(null);
-                    }}
+                    onClick={() => { setDemoMode(true); setError(null); }}
                     className="mt-3 text-sm px-4 py-2 rounded-lg border border-gold bg-gold/10 text-gold hover:bg-gold/20 transition-all"
                   >
                     Switch to Demo Mode

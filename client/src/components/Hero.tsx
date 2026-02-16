@@ -1,6 +1,10 @@
+import { useState } from 'react';
+
 interface Props {
   onAnalyseClick: () => void;
+  onExtractListing: (text: string) => void;
   visible: boolean;
+  isExtracting: boolean;
 }
 
 const audiences = [
@@ -12,40 +16,71 @@ const audiences = [
 
 const features = [
   {
-    label: 'Land Registry Comparables',
-    desc: 'Valuation backed by real HM Land Registry sold prices',
+    label: 'AI Valuation + Comps',
+    desc: 'Backed by real HM Land Registry sold prices',
   },
   {
-    label: 'Risk & Opportunity Flags',
-    desc: 'Red flags, warnings and positives with estimated £ impact',
+    label: 'Risk & Red Flags',
+    desc: 'Issues that cost money, with estimated £ impact',
   },
   {
-    label: 'Instant Verdict',
-    desc: 'Clear GOOD DEAL / FAIR / OVERPRICED rating in seconds',
+    label: 'Negotiation Points',
+    desc: 'Suggested offer range + walk-away price',
   },
   {
-    label: 'Shareable Report',
-    desc: 'PDF export to share with your solicitor or mortgage broker',
-    soon: true,
+    label: 'Deal Verdict',
+    desc: 'Instant GOOD DEAL / FAIR / OVERPRICED rating',
   },
 ];
 
-export default function Hero({ onAnalyseClick, visible }: Props) {
+export default function Hero({ onAnalyseClick, onExtractListing, visible, isExtracting }: Props) {
+  const [pasteText, setPasteText] = useState('');
+
   if (!visible) return null;
 
+  const handlePasteAnalyse = () => {
+    if (pasteText.trim()) {
+      onExtractListing(pasteText.trim());
+    } else {
+      onAnalyseClick();
+    }
+  };
+
   return (
-    <section className="max-w-4xl mx-auto px-4 pt-2 pb-10 text-center animate-slide-up">
+    <section className="max-w-4xl mx-auto px-4 pt-2 pb-8 text-center animate-slide-up">
       {/* Headline */}
       <h2 className="text-3xl sm:text-4xl md:text-5xl font-bold text-white leading-tight">
         Is this property{' '}
         <span className="text-cyan">worth it</span>?
       </h2>
 
-      {/* One-liner */}
-      <p className="mt-4 text-gray-400 text-base sm:text-lg max-w-2xl mx-auto leading-relaxed">
-        Paste a Rightmove or Zoopla listing &rarr; get an instant fairness
-        check with Land Registry comps, yield analysis, and risk flags.
+      {/* 1-line promise */}
+      <p className="mt-3 text-gray-400 text-base sm:text-lg max-w-2xl mx-auto">
+        Get valuation, risks and negotiation points in under 10 seconds.
       </p>
+
+      {/* Primary entry: paste box */}
+      <div className="mt-6 max-w-2xl mx-auto">
+        <div className="flex gap-2">
+          <textarea
+            value={pasteText}
+            onChange={(e) => setPasteText(e.target.value)}
+            placeholder="Paste Rightmove / Zoopla listing text to auto-fill..."
+            rows={2}
+            className="flex-1 bg-navy-light border border-gray-700 rounded-xl px-4 py-3 text-white text-sm placeholder-gray-500 focus:outline-none focus:border-cyan transition-colors resize-none"
+          />
+          <button
+            onClick={handlePasteAnalyse}
+            disabled={isExtracting}
+            className="px-6 py-3 rounded-xl font-semibold text-navy bg-cyan hover:bg-cyan/90 disabled:opacity-50 transition-all text-sm whitespace-nowrap shadow-lg shadow-cyan/20 self-end"
+          >
+            {isExtracting ? 'Extracting...' : 'Analyse'}
+          </button>
+        </div>
+        <p className="mt-2 text-gray-600 text-xs">
+          Or <button onClick={onAnalyseClick} className="text-cyan/70 hover:text-cyan underline-offset-2 underline">fill in details manually</button> &mdash; example pre-filled, no sign-up needed
+        </p>
+      </div>
 
       {/* Audience pills */}
       <div className="mt-6 flex flex-wrap justify-center gap-2">
@@ -60,38 +95,26 @@ export default function Hero({ onAnalyseClick, visible }: Props) {
       </div>
 
       {/* Feature grid */}
-      <div className="mt-8 grid grid-cols-1 sm:grid-cols-2 gap-3 max-w-2xl mx-auto text-left">
+      <div className="mt-6 grid grid-cols-2 sm:grid-cols-4 gap-3 max-w-3xl mx-auto">
         {features.map((f) => (
           <div
             key={f.label}
-            className="flex items-start gap-2.5 bg-navy-card/60 border border-gray-800 rounded-xl px-4 py-3"
+            className="bg-navy-card/60 border border-gray-800 rounded-xl px-3 py-3 text-center"
           >
-            <span className="mt-1 w-1.5 h-1.5 rounded-full bg-cyan flex-shrink-0" />
-            <div>
-              <p className="text-white text-sm font-medium">
-                {f.label}
-                {f.soon && (
-                  <span className="ml-1.5 text-[10px] px-1.5 py-0.5 rounded bg-gold/10 text-gold border border-gold/20 align-middle">
-                    SOON
-                  </span>
-                )}
-              </p>
-              <p className="text-gray-500 text-xs mt-0.5">{f.desc}</p>
-            </div>
+            <p className="text-white text-xs font-semibold">{f.label}</p>
+            <p className="text-gray-500 text-[11px] mt-1 leading-snug">{f.desc}</p>
           </div>
         ))}
       </div>
 
-      {/* Primary CTA */}
-      <button
-        onClick={onAnalyseClick}
-        className="mt-8 px-8 py-3.5 rounded-xl font-semibold text-navy bg-cyan hover:bg-cyan/90 transition-all text-base shadow-lg shadow-cyan/20"
-      >
-        Analyse a Listing
-      </button>
-      <p className="mt-2 text-gray-600 text-xs">
-        Example pre-filled &mdash; try it instantly, no sign-up needed
-      </p>
+      {/* Trust cues */}
+      <div className="mt-5 flex flex-wrap justify-center gap-4 text-[11px] text-gray-500">
+        <span>Uses HM Land Registry sold prices</span>
+        <span>&middot;</span>
+        <span>No account needed</span>
+        <span>&middot;</span>
+        <span>Searches not stored</span>
+      </div>
     </section>
   );
 }
