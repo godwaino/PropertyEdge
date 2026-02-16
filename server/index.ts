@@ -4,7 +4,10 @@ import path from 'path';
 import Anthropic from '@anthropic-ai/sdk';
 import dotenv from 'dotenv';
 
+// Load .env from project root regardless of working directory
+dotenv.config({ path: path.join(__dirname, '..', '.env') });
 dotenv.config({ path: '../.env' });
+dotenv.config();
 
 const app = express();
 const PORT = process.env.PORT || 8080;
@@ -15,6 +18,11 @@ app.use(express.json());
 // Serve the built React frontend
 const clientDist = path.join(__dirname, '..', 'client', 'dist');
 app.use(express.static(clientDist));
+
+if (!process.env.ANTHROPIC_API_KEY) {
+  console.error('WARNING: ANTHROPIC_API_KEY not found. Create a .env file in the project root with your key.');
+  console.error('  echo "ANTHROPIC_API_KEY=your-key-here" > .env');
+}
 
 const anthropic = new Anthropic({
   apiKey: process.env.ANTHROPIC_API_KEY,
