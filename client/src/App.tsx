@@ -10,6 +10,7 @@ export default function App() {
   const [result, setResult] = useState<AnalysisResult | null>(null);
   const [lastProperty, setLastProperty] = useState<PropertyInput | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [demoMode, setDemoMode] = useState(false);
 
   const handleAnalyze = async (property: PropertyInput) => {
     setIsLoading(true);
@@ -18,7 +19,8 @@ export default function App() {
     setLastProperty(property);
 
     try {
-      const response = await fetch('/api/analyze', {
+      const endpoint = demoMode ? '/api/demo' : '/api/analyze';
+      const response = await fetch(endpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(property),
@@ -30,6 +32,12 @@ export default function App() {
       }
 
       const data: AnalysisResult = await response.json();
+
+      // Add a small delay in demo mode so the loading animation is visible
+      if (demoMode) {
+        await new Promise((r) => setTimeout(r, 3000));
+      }
+
       setResult(data);
     } catch (err: any) {
       setError(err.message || 'Something went wrong. Please try again.');
@@ -49,7 +57,21 @@ export default function App() {
       <div className="relative z-10 pb-16">
         <Header />
 
-        <main className="px-4 mt-4">
+        {/* Demo mode toggle */}
+        <div className="max-w-4xl mx-auto px-4 mb-2 flex justify-end">
+          <button
+            onClick={() => setDemoMode(!demoMode)}
+            className={`text-xs px-3 py-1.5 rounded-full border transition-all ${
+              demoMode
+                ? 'border-gold bg-gold/10 text-gold'
+                : 'border-gray-700 text-gray-500 hover:border-gray-500'
+            }`}
+          >
+            {demoMode ? 'Demo Mode ON' : 'Demo Mode OFF'}
+          </button>
+        </div>
+
+        <main className="px-4 mt-2">
           <PropertyForm onSubmit={handleAnalyze} isLoading={isLoading} />
 
           {error && (
@@ -57,7 +79,7 @@ export default function App() {
               <div className="bg-pe-red/10 border border-pe-red/30 rounded-xl p-4 text-center">
                 <p className="text-pe-red font-medium">{error}</p>
                 <p className="text-gray-400 text-sm mt-1">
-                  Check your API key and try again.
+                  Check your API key or enable Demo Mode.
                 </p>
               </div>
             </div>

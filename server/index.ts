@@ -105,6 +105,70 @@ Where:
   }
 });
 
+// Demo endpoint - returns realistic mock data for recording without API credits
+app.post('/api/demo', (req, res) => {
+  const property: PropertyRequest = req.body;
+  const price = property.askingPrice || 285000;
+  const valuation = Math.round(price * 0.965);
+
+  res.json({
+    valuation: { amount: valuation, confidence: 3.2 },
+    verdict: 'FAIR' as const,
+    savings: price - valuation,
+    red_flags: [
+      {
+        title: 'Leasehold Ground Rent Escalation Risk',
+        description: `Ground rent of £${property.groundRent || 250}/yr may be subject to escalation clauses. Check the lease for doubling clauses which could make the property unmortgageable in future. This is a known issue in ${property.postcode || 'this area'} for properties built around ${property.yearBuilt || 2019}.`,
+        impact: 15000,
+      },
+      {
+        title: 'Service Charge Above Area Average',
+        description: `At £${property.serviceCharge || 1200}/yr, the service charge is approximately 18% above the average for comparable ${property.propertyType || 'flat'}s in ${property.postcode || 'this postcode'}. Over a 10-year period this represents significant additional cost.`,
+        impact: 8500,
+      },
+    ],
+    warnings: [
+      {
+        title: 'EWS1 Fire Safety Certificate',
+        description: `Properties built around ${property.yearBuilt || 2019} in this area may require an EWS1 form for external wall fire safety. If the building has cladding, obtaining this certificate can delay sales and potentially incur remediation costs.`,
+        impact: 4000,
+      },
+      {
+        title: 'Limited Parking in City Centre',
+        description: `${property.address || 'This property'} is in a city centre location where allocated parking is scarce. Lack of parking can reduce resale appeal and may cost £1,500-3,000/yr for a nearby space.`,
+        impact: 2500,
+      },
+      {
+        title: 'Potential Management Company Issues',
+        description: 'Leasehold flats in large developments can face management company disputes. Request the last 3 years of service charge accounts and check for any planned major works.',
+        impact: 3000,
+      },
+    ],
+    positives: [
+      {
+        title: 'Modern Build with NHBC Warranty',
+        description: `Built in ${property.yearBuilt || 2019}, this property likely still has NHBC warranty coverage (10 years from completion). This protects against structural defects and reduces risk.`,
+        impact: 12000,
+      },
+      {
+        title: 'Prime City Centre Location',
+        description: `${property.postcode || 'M3'} is a high-demand area with strong rental yields (5-6%) and consistent capital appreciation. Proximity to transport links, amenities and employment hubs supports long-term value.`,
+        impact: 20000,
+      },
+      {
+        title: 'Good Size for Property Type',
+        description: `At ${property.sizeSqm || 85}sqm, this ${property.bedrooms || 2}-bed ${property.propertyType || 'flat'} is above average size for the area (typical ${property.bedrooms || 2}-beds are 55-70sqm). Larger units command premium prices and attract more buyers.`,
+        impact: 8000,
+      },
+      {
+        title: '999-Year Lease',
+        description: 'With 999 years remaining, the lease length is effectively equivalent to freehold. No lease extension costs will be needed, eliminating one of the biggest leasehold risks.',
+        impact: 10000,
+      },
+    ],
+  });
+});
+
 app.get('/api/health', (_req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
