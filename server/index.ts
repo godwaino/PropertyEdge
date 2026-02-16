@@ -128,6 +128,133 @@ interface PropertyRequest {
   leaseYears?: number;
 }
 
+// Rightmove listing scraper endpoint
+app.post('/api/rightmove', rateLimit, async (req, res) => {
+  const { url } = req.body;
+
+  if (!url || typeof url !== 'string') {
+    res.status(400).json({ error: 'Missing URL', message: 'Please provide a Rightmove URL.' });
+    return;
+  }
+
+  // Validate it's a Rightmove URL
+  if (!/^https?:\/\/(www\.)?rightmove\.co\.uk\/propert/i.test(url)) {
+    res.status(400).json({ error: 'Invalid URL', message: 'Please provide a valid Rightmove property URL.' });
+    return;
+  }
+
+  try {
+    const response = await fetch(url, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+        'Accept-Language': 'en-GB,en;q=0.9',
+      },
+    });
+
+    if (!response.ok) {
+      throw new Error(`Rightmove returned ${response.status}`);
+    }
+
+    const html = await response.text();
+
+    // Extract PAGE_MODEL JSON from the page script
+    const pageModelMatch = html.match(/window\.PAGE_MODEL\s*=\s*(\{[\s\S]*?\})\s*<\/script>/);
+
+    let property: Partial<PropertyRequest> = {};
+
+    if (pageModelMatch) {
+      try {
+        const model = JSON.parse(pageModelMatch[1]);
+        const pd = model?.propertyData;
+        if (pd) {
+          property.address = pd.address?.displayAddress || '';
+          property.postcode = pd.address?.outcode && pd.address?.incode
+            ? `${pd.address.outcode} ${pd.address.incode}`
+            : '';
+          property.askingPrice = pd.prices?.primaryPrice
+            ? Number(pd.prices.primaryPrice.replace(/[^0-9]/g, ''))
+            : 0;
+          property.bedrooms = pd.bedrooms || 0;
+          property.sizeSqm = pd.sizings?.[0]?.minimumSize || pd.sizings?.[0]?.maximumSize || 0;
+          // Convert sq ft to sqm if needed
+          if (pd.sizings?.[0]?.unit === 'sqft' && property.sizeSqm) {
+            property.sizeSqm = Math.round(property.sizeSqm * 0.0929);
+          }
+          // Map property type
+          const typeStr = (pd.propertySubType || pd.propertyType || '').toLowerCase();
+          if (typeStr.includes('flat') || typeStr.includes('apartment') || typeStr.includes('maisonette')) {
+            property.propertyType = 'flat';
+          } else if (typeStr.includes('terraced')) {
+            property.propertyType = 'terraced';
+          } else if (typeStr.includes('semi')) {
+            property.propertyType = 'semi-detached';
+          } else if (typeStr.includes('detached')) {
+            property.propertyType = 'detached';
+          } else if (typeStr.includes('bungalow')) {
+            property.propertyType = 'bungalow';
+          } else {
+            property.propertyType = 'flat';
+          }
+          // Tenure
+          const tenureStr = (pd.tenure?.tenureType || '').toLowerCase();
+          property.tenure = tenureStr.includes('freehold') ? 'freehold' : 'leasehold';
+        }
+      } catch {
+        // PAGE_MODEL parse failed, fall through to HTML parsing
+      }
+    }
+
+    // Fallback: parse from HTML meta tags and visible text
+    if (!property.address) {
+      const titleMatch = html.match(/<title>([^<]+)<\/title>/i);
+      if (titleMatch) {
+        // Rightmove titles are like "2 bed flat for sale in Address, Postcode - Rightmove"
+        const title = titleMatch[1];
+        const addressMatch = title.match(/(?:for sale|to rent)\s+(?:in\s+)?(.+?)(?:\s*-\s*Rightmove|\s*\|)/i);
+        if (addressMatch) property.address = addressMatch[1].trim();
+        const bedMatch = title.match(/(\d+)\s*bed/i);
+        if (bedMatch) property.bedrooms = Number(bedMatch[1]);
+      }
+    }
+
+    if (!property.askingPrice) {
+      const priceMatch = html.match(/"price":"([^"]+)"/);
+      if (priceMatch) {
+        property.askingPrice = Number(priceMatch[1].replace(/[^0-9]/g, ''));
+      }
+    }
+
+    if (!property.postcode) {
+      const postcodeMatch = html.match(/([A-Z]{1,2}\d[A-Z\d]?\s*\d[A-Z]{2})/i);
+      if (postcodeMatch) property.postcode = postcodeMatch[1];
+    }
+
+    // Set defaults for missing fields
+    property.yearBuilt = property.yearBuilt || 2000;
+    property.sizeSqm = property.sizeSqm || 0;
+    property.tenure = property.tenure || 'freehold';
+    property.propertyType = property.propertyType || 'flat';
+    property.bedrooms = property.bedrooms || 0;
+
+    if (!property.address && !property.askingPrice) {
+      res.status(422).json({
+        error: 'Could not extract details',
+        message: 'Rightmove may have blocked the request. Please enter the details manually.',
+      });
+      return;
+    }
+
+    res.json(property);
+  } catch (error: any) {
+    console.error('Rightmove scrape error:', error?.message);
+    res.status(500).json({
+      error: 'Scrape failed',
+      message: 'Could not fetch Rightmove listing. Please enter details manually.',
+    });
+  }
+});
+
 // Live analysis endpoint (requires API key)
 app.post('/api/analyze', rateLimit, async (req, res) => {
   if (!anthropic) {
