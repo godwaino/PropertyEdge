@@ -1,9 +1,10 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { PropertyInput } from '../types/property';
 
 interface Props {
   onSubmit: (property: PropertyInput) => void;
   isLoading: boolean;
+  autoOpenImport?: boolean;
 }
 
 interface FormFields {
@@ -32,13 +33,18 @@ const defaults: FormFields = {
   leaseYears: '999',
 };
 
-export default function PropertyForm({ onSubmit, isLoading }: Props) {
+export default function PropertyForm({ onSubmit, isLoading, autoOpenImport }: Props) {
   const [fields, setFields] = useState<FormFields>(defaults);
   const [tenure, setTenure] = useState('leasehold');
   const [listingText, setListingText] = useState('');
   const [isExtracting, setIsExtracting] = useState(false);
   const [extractError, setExtractError] = useState<string | null>(null);
   const [showImport, setShowImport] = useState(false);
+
+  // Open import panel when hero CTA is clicked
+  useEffect(() => {
+    if (autoOpenImport) setShowImport(true);
+  }, [autoOpenImport]);
 
   const setField = (name: keyof FormFields, value: string) => {
     setFields((prev) => ({ ...prev, [name]: value }));
@@ -120,6 +126,7 @@ export default function PropertyForm({ onSubmit, isLoading }: Props) {
 
   return (
     <form
+      id="analyze"
       onSubmit={handleSubmit}
       className="w-full max-w-4xl mx-auto bg-navy-card border border-gray-800 rounded-2xl p-6"
     >

@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import Header from './components/Header';
+import Hero from './components/Hero';
 import PropertyForm from './components/PropertyForm';
 import AnalysisResults from './components/AnalysisResults';
 import LoadingState from './components/LoadingState';
@@ -12,6 +13,7 @@ export default function App() {
   const [error, setError] = useState<string | null>(null);
   const [demoMode, setDemoMode] = useState(false);
   const [apiKeyConfigured, setApiKeyConfigured] = useState(false);
+  const [autoOpenImport, setAutoOpenImport] = useState(false);
 
   // Check if API key is configured on load
   useEffect(() => {
@@ -29,6 +31,14 @@ export default function App() {
         setDemoMode(true);
       });
   }, []);
+
+  const handleAnalyseClick = () => {
+    setAutoOpenImport(true);
+    // Smooth scroll to the form
+    setTimeout(() => {
+      document.getElementById('analyze')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 50);
+  };
 
   const handleAnalyze = async (property: PropertyInput) => {
     setIsLoading(true);
@@ -64,6 +74,8 @@ export default function App() {
     }
   };
 
+  const showHero = !result && !isLoading;
+
   return (
     <div className="min-h-screen bg-navy">
       {/* Background gradient */}
@@ -92,8 +104,15 @@ export default function App() {
           </button>
         </div>
 
+        {/* Hero — visible until results or loading */}
+        <Hero onAnalyseClick={handleAnalyseClick} visible={showHero} />
+
         <main className="px-4 mt-2">
-          <PropertyForm onSubmit={handleAnalyze} isLoading={isLoading} />
+          <PropertyForm
+            onSubmit={handleAnalyze}
+            isLoading={isLoading}
+            autoOpenImport={autoOpenImport}
+          />
 
           {error && (
             <div className="w-full max-w-4xl mx-auto mt-6">
