@@ -20,8 +20,24 @@ const envPaths = [
 let envLoaded = false;
 for (const envPath of envPaths) {
   if (fs.existsSync(envPath)) {
-    console.log(`Loaded .env from: ${envPath}`);
-    dotenv.config({ path: envPath, override: true });
+    console.log(`Loading .env from: ${envPath}`);
+    const result = dotenv.config({ path: envPath, override: true });
+    if (result.error) {
+      console.log('dotenv error:', result.error.message);
+    } else {
+      console.log('dotenv parsed keys:', Object.keys(result.parsed || {}));
+    }
+    // Fallback: manually parse and set env vars if dotenv fails
+    if (!process.env.ANTHROPIC_API_KEY) {
+      const envContent = fs.readFileSync(envPath, 'utf-8');
+      for (const line of envContent.split('\n')) {
+        const match = line.match(/^([^#=]+)=(.*)$/);
+        if (match) {
+          process.env[match[1].trim()] = match[2].trim();
+        }
+      }
+      console.log('Used manual .env parsing fallback');
+    }
     envLoaded = true;
     break;
   }
