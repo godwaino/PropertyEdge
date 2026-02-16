@@ -96,7 +96,8 @@ app.use(cors());
 app.use(express.json({ limit: '100kb' }));
 
 // Serve built React frontend
-const clientDist = path.join(__dirname, '..', 'client', 'dist');
+// __dirname is server/dist at runtime, so go up two levels to reach project root
+const clientDist = path.join(__dirname, '..', '..', 'client', 'dist');
 if (fs.existsSync(clientDist)) {
   app.use(express.static(clientDist));
   console.log(`Serving frontend from: ${clientDist}`);
