@@ -128,6 +128,57 @@ interface PropertyRequest {
   leaseYears?: number;
 }
 
+// Resolve a partial postcode (e.g. "M3") to a full one using address context
+async function resolveFullPostcode(partialPostcode: string, address: string): Promise<string> {
+  const trimmed = partialPostcode.trim().toUpperCase();
+
+  // Already a full postcode (outward + space + inward, e.g. "M3 4LQ")
+  if (/^[A-Z]{1,2}\d[A-Z\d]?\s*\d[A-Z]{2}$/i.test(trimmed)) {
+    return trimmed;
+  }
+
+  // Only partial (outward code like "M3", "SW1A", "EC2") — need to resolve
+  // Step 1: Use postcodes.io to look up the partial postcode area
+  // Step 2: Search with address to narrow down the exact postcode
+  const searchQuery = `${address}, ${trimmed}`;
+
+  try {
+    // postcodes.io free API — search by query string
+    const encoded = encodeURIComponent(searchQuery);
+    const response = await fetch(`https://api.postcodes.io/postcodes?q=${encoded}&limit=5`);
+    const data = await response.json() as any;
+
+    if (data.status === 200 && data.result && data.result.length > 0) {
+      // Find the best match — one whose outcode matches our partial
+      const match = data.result.find((r: any) =>
+        r.outcode?.toUpperCase() === trimmed
+      );
+      if (match) return match.postcode;
+      // If no outcode match, return first result as best guess
+      return data.result[0].postcode;
+    }
+  } catch (err: any) {
+    console.error('postcodes.io search failed:', err?.message);
+  }
+
+  try {
+    // Fallback: autocomplete the partial postcode and pick the first result
+    const encoded = encodeURIComponent(trimmed);
+    const response = await fetch(`https://api.postcodes.io/postcodes/${encoded}/autocomplete`);
+    const data = await response.json() as any;
+
+    if (data.status === 200 && data.result && data.result.length > 0) {
+      // Return the first autocomplete suggestion
+      return data.result[0];
+    }
+  } catch (err: any) {
+    console.error('postcodes.io autocomplete failed:', err?.message);
+  }
+
+  // Could not resolve — return what we have
+  return trimmed;
+}
+
 // Extract property details from pasted listing text using Claude
 app.post('/api/extract-listing', rateLimit, async (req, res) => {
   const { text } = req.body;
@@ -197,6 +248,12 @@ Rules:
     }
 
     const extracted = JSON.parse(jsonMatch[0]);
+
+    // If we only got a partial postcode, try to resolve the full one
+    if (extracted.postcode && extracted.address) {
+      extracted.postcode = await resolveFullPostcode(extracted.postcode, extracted.address);
+    }
+
     res.json(extracted);
   } catch (error: any) {
     console.error('Listing extraction error:', error?.message);
