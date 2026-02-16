@@ -4,18 +4,18 @@ FROM node:22-alpine AS builder
 WORKDIR /app
 
 # Install root dependencies
-COPY package.json package-lock.json* ./
-RUN npm ci --ignore-scripts
+COPY package.json package-lock.json ./
+RUN npm ci
 
 # Install client dependencies and build
-COPY client/package.json client/package-lock.json* ./client/
-RUN cd client && npm ci --ignore-scripts
+COPY client/package.json client/package-lock.json ./client/
+RUN cd client && npm ci
 COPY client/ ./client/
 RUN npm run build:client
 
 # Install server dependencies and build
-COPY server/package.json server/package-lock.json* ./server/
-RUN cd server && npm ci --ignore-scripts
+COPY server/package.json server/package-lock.json ./server/
+RUN cd server && npm ci
 COPY server/ ./server/
 RUN npm run build:server
 
@@ -26,9 +26,10 @@ WORKDIR /app
 
 ENV NODE_ENV=production
 
-# Copy server package files and install production deps
-COPY --from=builder /app/server/package.json /app/server/package-lock.json* ./server/
-RUN cd server && npm ci --omit=dev --ignore-scripts
+# Copy server package files and install production deps only
+COPY --from=builder /app/server/package.json ./server/
+COPY --from=builder /app/server/package-lock.json ./server/
+RUN cd server && npm ci --omit=dev
 
 # Copy compiled server
 COPY --from=builder /app/server/dist ./server/dist
