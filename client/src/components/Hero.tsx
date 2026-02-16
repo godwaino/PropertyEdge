@@ -11,7 +11,6 @@ const audiences = [
   'First-Time Buyer',
   'Property Investor',
   'Home Mover',
-  'Content Creator',
 ];
 
 const features = [
