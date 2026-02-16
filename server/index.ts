@@ -396,9 +396,10 @@ app.post('/api/analyze', rateLimit, async (req, res) => {
 
     const prompt = `You are a UK property valuation expert. You have access to REAL Land Registry sold price data below.
 
+Your task: determine the fair market value of this property. You do NOT know the asking price — value it independently.
+
 Property Details:
 - Address: ${property.address}, ${property.postcode}
-- Asking Price: £${property.askingPrice.toLocaleString()}
 - Type: ${property.propertyType}, ${property.bedrooms} bedrooms, ${property.sizeSqm}sqm
 - Year Built: ${property.yearBuilt}
 - Tenure: ${property.tenure}${leaseholdInfo}
@@ -409,24 +410,17 @@ VALUATION METHODOLOGY — you must follow these steps:
       : 'No Land Registry data was available for this postcode. Use your knowledge of UK property prices for this area to estimate.'}
 2. Calculate a £/sqm rate based on the comparable sales data (or your knowledge if no data).
 3. Apply adjustments for: number of bedrooms, year built, tenure, condition, lease length, service charges.
-4. Your valuation MUST be an independent figure — do NOT simply adjust the asking price by a percentage. The valuation can be significantly above or below asking.
+4. Your valuation MUST be derived from evidence, not guesswork.
 5. Confidence: 5-10% for well-evidenced valuations with good comparables, 10-20% if limited data.
 
-CRITICAL:
-- If comparable data is provided, your valuation MUST be anchored to those real sold prices, not the asking price.
-- If the asking price is far from what comparables show, say so clearly in the basis.
-- Explain which specific comparable sales informed your figure.
-
 Also analyze:
-- Red flags: serious issues with financial impact >£5,000
-- Warnings: moderate concerns with £1,000-£5,000 impact
+- Red flags: serious issues a buyer should know about (with estimated financial impact >£5,000)
+- Warnings: moderate concerns (£1,000-£5,000 impact)
 - Positives: features that add value or reduce risk
 
 You MUST respond with ONLY valid JSON in this exact format, no other text:
 {
   "valuation": {"amount": 287500, "confidence": 8.5, "basis": "Based on 12 Land Registry sales in M3: similar 2-bed flats sold for £270k-£310k. At £3,350/sqm for 85sqm, adjusted for year built."},
-  "verdict": "FAIR",
-  "savings": 2500,
   "comparables_used": 12,
   "red_flags": [{"title": "Issue", "description": "Detailed explanation", "impact": 12000}],
   "warnings": [{"title": "Warning", "description": "Detailed explanation", "impact": 3000}],
@@ -434,10 +428,9 @@ You MUST respond with ONLY valid JSON in this exact format, no other text:
 }
 
 Where:
+- valuation.amount is your independent fair market valuation in £
 - valuation.basis explains specifically which comparables/data informed the figure
 - comparables_used is the number of Land Registry sales used (0 if none available)
-- verdict is one of: "GOOD_DEAL", "FAIR", or "OVERPRICED"
-- savings = asking price minus your valuation (positive = overpriced, negative = good deal)
 - Include at least 2 items in each category`;
 
     const message = await anthropic.messages.create({
@@ -457,7 +450,20 @@ Where:
     }
 
     const analysis = JSON.parse(jsonMatch[0]);
-    res.json(analysis);
+
+    // Compute savings and verdict server-side (Claude never saw the asking price)
+    const aiValuation = analysis.valuation?.amount || 0;
+    const savings = property.askingPrice - aiValuation;
+    let verdict: string;
+    if (savings > property.askingPrice * 0.05) verdict = 'OVERPRICED';
+    else if (savings < -property.askingPrice * 0.03) verdict = 'GOOD_DEAL';
+    else verdict = 'FAIR';
+
+    res.json({
+      ...analysis,
+      savings,
+      verdict,
+    });
   } catch (error: any) {
     console.error('Analysis error:', error?.status, error?.message);
 
