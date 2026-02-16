@@ -96,7 +96,8 @@ app.use(cors());
 app.use(express.json({ limit: '100kb' }));
 
 // Serve built React frontend
-const clientDist = path.join(__dirname, '..', 'client', 'dist');
+// __dirname is server/dist at runtime, so go up two levels to reach project root
+const clientDist = path.join(__dirname, '..', '..', 'client', 'dist');
 if (fs.existsSync(clientDist)) {
   app.use(express.static(clientDist));
   console.log(`Serving frontend from: ${clientDist}`);
@@ -126,6 +127,144 @@ interface PropertyRequest {
   groundRent?: number;
   leaseYears?: number;
 }
+
+// Resolve a partial postcode (e.g. "M3") to a full one using address context
+async function resolveFullPostcode(partialPostcode: string, address: string): Promise<string> {
+  const trimmed = partialPostcode.trim().toUpperCase();
+
+  // Already a full postcode (outward + space + inward, e.g. "M3 4LQ")
+  if (/^[A-Z]{1,2}\d[A-Z\d]?\s*\d[A-Z]{2}$/i.test(trimmed)) {
+    return trimmed;
+  }
+
+  // Only partial (outward code like "M3", "SW1A", "EC2") — need to resolve
+  // Step 1: Use postcodes.io to look up the partial postcode area
+  // Step 2: Search with address to narrow down the exact postcode
+  const searchQuery = `${address}, ${trimmed}`;
+
+  try {
+    // postcodes.io free API — search by query string
+    const encoded = encodeURIComponent(searchQuery);
+    const response = await fetch(`https://api.postcodes.io/postcodes?q=${encoded}&limit=5`);
+    const data = await response.json() as any;
+
+    if (data.status === 200 && data.result && data.result.length > 0) {
+      // Find the best match — one whose outcode matches our partial
+      const match = data.result.find((r: any) =>
+        r.outcode?.toUpperCase() === trimmed
+      );
+      if (match) return match.postcode;
+      // If no outcode match, return first result as best guess
+      return data.result[0].postcode;
+    }
+  } catch (err: any) {
+    console.error('postcodes.io search failed:', err?.message);
+  }
+
+  try {
+    // Fallback: autocomplete the partial postcode and pick the first result
+    const encoded = encodeURIComponent(trimmed);
+    const response = await fetch(`https://api.postcodes.io/postcodes/${encoded}/autocomplete`);
+    const data = await response.json() as any;
+
+    if (data.status === 200 && data.result && data.result.length > 0) {
+      // Return the first autocomplete suggestion
+      return data.result[0];
+    }
+  } catch (err: any) {
+    console.error('postcodes.io autocomplete failed:', err?.message);
+  }
+
+  // Could not resolve — return what we have
+  return trimmed;
+}
+
+// Extract property details from pasted listing text using Claude
+app.post('/api/extract-listing', rateLimit, async (req, res) => {
+  const { text } = req.body;
+
+  if (!text || typeof text !== 'string' || text.trim().length < 10) {
+    res.status(400).json({ error: 'Invalid input', message: 'Please paste at least a few lines of the listing.' });
+    return;
+  }
+
+  if (text.length > 10000) {
+    res.status(400).json({ error: 'Too long', message: 'Please paste just the key details (max 10,000 characters).' });
+    return;
+  }
+
+  if (!anthropic) {
+    res.status(500).json({
+      error: 'No API key',
+      message: 'API key required for listing extraction. Please enter details manually.',
+    });
+    return;
+  }
+
+  try {
+    const msg = await anthropic.messages.create({
+      model: 'claude-sonnet-4-20250514',
+      max_tokens: 512,
+      messages: [{
+        role: 'user',
+        content: `Extract UK property details from this listing text. Return ONLY valid JSON, no other text.
+
+Listing text:
+${text.substring(0, 5000)}
+
+Return this exact JSON format:
+{
+  "address": "street address without postcode",
+  "postcode": "full or partial UK postcode",
+  "askingPrice": 285000,
+  "bedrooms": 2,
+  "sizeSqm": 85,
+  "propertyType": "flat",
+  "tenure": "leasehold",
+  "yearBuilt": 2000,
+  "serviceCharge": 0,
+  "groundRent": 0,
+  "leaseYears": 0
+}
+
+Rules:
+- PRICE IS CRITICAL: Look for ANY price pattern: "£285,000", "Guide price £285,000", "Offers over £285,000", "Asking price: £285,000", "Price on application", "£285k", "From £285,000". Extract the number without £ or commas. If you see "250,000" anywhere, that is likely the price.
+- YEAR BUILT: Look for clues like "built in 2019", "new build", "converted in 2005", "Victorian" (~1880), "Edwardian" (~1905), "1930s semi", "post-war" (~1950), "1960s", "Georgian" (~1800), "Art Deco" (~1935), "period property" (~1900). Estimate from these clues. Use 0 ONLY if there are absolutely no clues.
+- propertyType must be one of: "flat", "terraced", "semi-detached", "detached", "bungalow"
+- tenure must be "leasehold" or "freehold"
+- askingPrice must be a number (no £ or commas)
+- If size is in sq ft, convert to sqm (multiply by 0.0929)
+- Use 0 or "" for fields you genuinely cannot determine
+- Do NOT make up specific addresses or postcodes you aren't confident about`,
+      }],
+    });
+
+    const content = msg.content[0];
+    if (content.type !== 'text') {
+      throw new Error('Unexpected response type');
+    }
+
+    const jsonMatch = content.text.match(/\{[\s\S]*\}/);
+    if (!jsonMatch) {
+      throw new Error('Could not parse response');
+    }
+
+    const extracted = JSON.parse(jsonMatch[0]);
+
+    // If we only got a partial postcode, try to resolve the full one
+    if (extracted.postcode && extracted.address) {
+      extracted.postcode = await resolveFullPostcode(extracted.postcode, extracted.address);
+    }
+
+    res.json(extracted);
+  } catch (error: any) {
+    console.error('Listing extraction error:', error?.message);
+    res.status(500).json({
+      error: 'Extraction failed',
+      message: 'Could not extract details. Please enter them manually.',
+    });
+  }
+});
 
 // Live analysis endpoint (requires API key)
 app.post('/api/analyze', rateLimit, async (req, res) => {
