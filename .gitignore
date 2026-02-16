@@ -4,3 +4,6 @@ data/propertyedge.db
 data/ppd.sqlite
 .env
 .DS_Store
+node_modules/
+dist/
+client/dist/
