@@ -365,6 +365,35 @@ Rules:
   }
 });
 
+// Cache valuations so the same property details always return the same valuation.
+// Key = hash of property details (excluding asking price). TTL = 1 hour.
+const valuationCache = new Map<string, { result: any; timestamp: number }>();
+const CACHE_TTL_MS = 60 * 60 * 1000; // 1 hour
+
+function propertyHash(p: PropertyRequest): string {
+  // Everything that affects the valuation — deliberately excludes askingPrice
+  return [
+    p.address.trim().toLowerCase(),
+    p.postcode.trim().toUpperCase(),
+    p.propertyType,
+    p.bedrooms,
+    p.sizeSqm,
+    p.yearBuilt,
+    p.tenure,
+    p.serviceCharge || 0,
+    p.groundRent || 0,
+    p.leaseYears || 0,
+  ].join('|');
+}
+
+// Periodically clean expired cache entries
+setInterval(() => {
+  const now = Date.now();
+  for (const [key, entry] of valuationCache) {
+    if (now - entry.timestamp > CACHE_TTL_MS) valuationCache.delete(key);
+  }
+}, CACHE_TTL_MS);
+
 // Live analysis endpoint (requires API key)
 app.post('/api/analyze', rateLimit, async (req, res) => {
   if (!anthropic) {
@@ -384,6 +413,22 @@ app.post('/api/analyze', rateLimit, async (req, res) => {
 
   try {
     const property: PropertyRequest = req.body;
+    const cacheKey = propertyHash(property);
+
+    // Check cache — same property details = same valuation (asking price excluded)
+    const cached = valuationCache.get(cacheKey);
+    if (cached && Date.now() - cached.timestamp < CACHE_TTL_MS) {
+      // Recompute only savings/verdict against possibly different asking price
+      const aiValuation = cached.result.valuation?.amount || 0;
+      const savings = property.askingPrice - aiValuation;
+      let verdict: string;
+      if (savings > property.askingPrice * 0.05) verdict = 'OVERPRICED';
+      else if (savings < -property.askingPrice * 0.03) verdict = 'GOOD_DEAL';
+      else verdict = 'FAIR';
+
+      res.json({ ...cached.result, savings, verdict });
+      return;
+    }
 
     // Fetch real comparable sales from Land Registry
     const comparables = await fetchComparables(property.postcode);
@@ -436,6 +481,7 @@ Where:
     const message = await anthropic.messages.create({
       model: 'claude-sonnet-4-20250514',
       max_tokens: 2048,
+      temperature: 0,
       messages: [{ role: 'user', content: prompt }],
     });
 
@@ -450,6 +496,9 @@ Where:
     }
 
     const analysis = JSON.parse(jsonMatch[0]);
+
+    // Cache the valuation (keyed on property details, excludes asking price)
+    valuationCache.set(cacheKey, { result: analysis, timestamp: Date.now() });
 
     // Compute savings and verdict server-side (Claude never saw the asking price)
     const aiValuation = analysis.valuation?.amount || 0;
