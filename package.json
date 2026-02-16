@@ -6,8 +6,11 @@
     "dev": "concurrently \"npm run server\" \"npm run client\"",
     "server": "cd server && npx tsx watch index.ts",
     "client": "cd client && npx vite --host",
-    "build": "cd client && npx vite build",
-    "start": "cd server && node dist/index.js"
+    "build": "npm run build:client && npm run build:server",
+    "build:client": "cd client && npx vite build",
+    "build:server": "cd server && npx tsc",
+    "start": "cd server && node dist/index.js",
+    "preview": "npm run build && npm start"
   },
   "devDependencies": {
     "concurrently": "^8.2.2"

@@ -49,8 +49,51 @@ if (!envLoaded) {
 const app = express();
 const PORT = process.env.PORT || 8080;
 
+// Basic rate limiter: max 20 analysis requests per IP per minute
+const rateLimitMap = new Map<string, { count: number; resetAt: number }>();
+const RATE_LIMIT = 20;
+const RATE_WINDOW_MS = 60_000;
+
+function rateLimit(req: express.Request, res: express.Response, next: express.NextFunction) {
+  const ip = req.ip || req.socket.remoteAddress || 'unknown';
+  const now = Date.now();
+  const entry = rateLimitMap.get(ip);
+
+  if (!entry || now > entry.resetAt) {
+    rateLimitMap.set(ip, { count: 1, resetAt: now + RATE_WINDOW_MS });
+    return next();
+  }
+
+  if (entry.count >= RATE_LIMIT) {
+    res.status(429).json({ error: 'Too many requests', message: 'Please wait a minute before trying again.' });
+    return;
+  }
+
+  entry.count++;
+  next();
+}
+
+// Periodically clean expired entries
+setInterval(() => {
+  const now = Date.now();
+  for (const [ip, entry] of rateLimitMap) {
+    if (now > entry.resetAt) rateLimitMap.delete(ip);
+  }
+}, RATE_WINDOW_MS);
+
+function validateProperty(body: any): { valid: boolean; error?: string } {
+  if (!body || typeof body !== 'object') return { valid: false, error: 'Request body must be a JSON object' };
+  if (!body.address || typeof body.address !== 'string' || body.address.length > 500) return { valid: false, error: 'Invalid address' };
+  if (!body.postcode || typeof body.postcode !== 'string' || !/^[A-Z]{1,2}\d[A-Z\d]?\s*\d[A-Z]{2}$/i.test(body.postcode.trim())) return { valid: false, error: 'Invalid UK postcode' };
+  if (typeof body.askingPrice !== 'number' || body.askingPrice < 1000 || body.askingPrice > 100_000_000) return { valid: false, error: 'Asking price must be between £1,000 and £100,000,000' };
+  if (typeof body.bedrooms !== 'number' || body.bedrooms < 0 || body.bedrooms > 20) return { valid: false, error: 'Bedrooms must be 0-20' };
+  if (typeof body.sizeSqm !== 'number' || body.sizeSqm < 5 || body.sizeSqm > 10000) return { valid: false, error: 'Size must be 5-10,000 sqm' };
+  if (typeof body.yearBuilt !== 'number' || body.yearBuilt < 1500 || body.yearBuilt > new Date().getFullYear() + 2) return { valid: false, error: 'Invalid year built' };
+  return { valid: true };
+}
+
 app.use(cors());
-app.use(express.json());
+app.use(express.json({ limit: '100kb' }));
 
 // Serve built React frontend
 const clientDist = path.join(__dirname, '..', 'client', 'dist');
@@ -85,13 +128,19 @@ interface PropertyRequest {
 }
 
 // Live analysis endpoint (requires API key)
-app.post('/api/analyze', async (req, res) => {
+app.post('/api/analyze', rateLimit, async (req, res) => {
   if (!anthropic) {
     res.status(500).json({
       error: 'No API key configured',
       message: 'Add ANTHROPIC_API_KEY to your .env file, then restart the server.',
       hint: 'Use Demo Mode to preview the app without an API key.',
     });
+    return;
+  }
+
+  const validation = validateProperty(req.body);
+  if (!validation.valid) {
+    res.status(400).json({ error: 'Validation error', message: validation.error });
     return;
   }
 
@@ -193,7 +242,7 @@ Where:
 });
 
 // Demo endpoint — always works, no API key needed
-app.post('/api/demo', (req, res) => {
+app.post('/api/demo', rateLimit, (req, res) => {
   const property: PropertyRequest = req.body;
   const price = property.askingPrice || 285000;
   const valuation = Math.round(price * 0.965);
