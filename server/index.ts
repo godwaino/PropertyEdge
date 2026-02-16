@@ -1,13 +1,25 @@
 import express from 'express';
 import cors from 'cors';
 import path from 'path';
+import fs from 'fs';
 import Anthropic from '@anthropic-ai/sdk';
 import dotenv from 'dotenv';
 
-// Load .env from project root regardless of working directory
-dotenv.config({ path: path.join(__dirname, '..', '.env') });
-dotenv.config({ path: '../.env' });
-dotenv.config();
+// Try multiple possible .env locations
+const envPaths = [
+  path.resolve(process.cwd(), '.env'),
+  path.resolve(process.cwd(), '..', '.env'),
+  path.resolve(__dirname, '..', '.env'),
+  path.resolve(__dirname, '.env'),
+];
+
+for (const envPath of envPaths) {
+  if (fs.existsSync(envPath)) {
+    console.log(`Loading .env from: ${envPath}`);
+    dotenv.config({ path: envPath });
+    break;
+  }
+}
 
 const app = express();
 const PORT = process.env.PORT || 8080;
@@ -20,12 +32,13 @@ const clientDist = path.join(__dirname, '..', 'client', 'dist');
 app.use(express.static(clientDist));
 
 if (!process.env.ANTHROPIC_API_KEY) {
-  console.error('WARNING: ANTHROPIC_API_KEY not found. Create a .env file in the project root with your key.');
-  console.error('  echo "ANTHROPIC_API_KEY=your-key-here" > .env');
+  console.error('ERROR: ANTHROPIC_API_KEY not found in environment.');
+  console.error('Searched these paths for .env:', envPaths);
+  console.error('Create a .env file in the project root: echo "ANTHROPIC_API_KEY=your-key" > .env');
 }
 
 const anthropic = new Anthropic({
-  apiKey: process.env.ANTHROPIC_API_KEY,
+  apiKey: process.env.ANTHROPIC_API_KEY || '',
 });
 
 interface PropertyRequest {
