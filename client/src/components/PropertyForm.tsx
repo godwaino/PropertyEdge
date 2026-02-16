@@ -5,6 +5,7 @@ interface Props {
   onSubmit: (property: PropertyInput) => void;
   isLoading: boolean;
   autoOpenImport?: boolean;
+  collapsed?: boolean;
 }
 
 interface FormFields {
@@ -43,7 +44,7 @@ function rawPrice(formatted: string): string {
   return formatted.replace(/[^0-9]/g, '');
 }
 
-export default function PropertyForm({ onSubmit, isLoading, autoOpenImport }: Props) {
+export default function PropertyForm({ onSubmit, isLoading, autoOpenImport, collapsed }: Props) {
   const [fields, setFields] = useState<FormFields>(defaults);
   const [tenure, setTenure] = useState('leasehold');
   const [listingText, setListingText] = useState('');
@@ -52,10 +53,17 @@ export default function PropertyForm({ onSubmit, isLoading, autoOpenImport }: Pr
   const [showImport, setShowImport] = useState(false);
   const [showOptional, setShowOptional] = useState(true);
   const [errors, setErrors] = useState<Partial<Record<keyof FormFields, string>>>({});
+  const [formExpanded, setFormExpanded] = useState(true);
 
   useEffect(() => {
     if (autoOpenImport) setShowImport(true);
   }, [autoOpenImport]);
+
+  // Collapse form when results are shown
+  useEffect(() => {
+    if (collapsed) setFormExpanded(false);
+    else setFormExpanded(true);
+  }, [collapsed]);
 
   const setField = (name: keyof FormFields, value: string) => {
     setFields((prev) => ({ ...prev, [name]: value }));
@@ -154,6 +162,27 @@ export default function PropertyForm({ onSubmit, isLoading, autoOpenImport }: Pr
       onSubmit={handleSubmit}
       className="w-full max-w-4xl mx-auto bg-navy-card border border-gray-800 rounded-2xl p-6"
     >
+      {/* Collapsed summary bar */}
+      {!formExpanded && (
+        <button
+          type="button"
+          onClick={() => setFormExpanded(true)}
+          className="w-full flex items-center justify-between text-left"
+        >
+          <div className="flex items-center gap-3 text-sm">
+            <span className="text-gray-500 text-xs">&#9654;</span>
+            <span className="text-white font-medium truncate">{fields.address}, {fields.postcode}</span>
+            <span className="text-gray-500">&middot;</span>
+            <span className="text-gray-400">&pound;{formatPrice(fields.askingPrice)}</span>
+            <span className="text-gray-500">&middot;</span>
+            <span className="text-gray-400">{fields.bedrooms} bed {fields.propertyType}</span>
+          </div>
+          <span className="text-cyan text-xs whitespace-nowrap ml-4">Edit details</span>
+        </button>
+      )}
+
+      {/* Full form - hidden when collapsed */}
+      {formExpanded && <>
       {/* Import from listing toggle */}
       <div className="mb-5">
         <button
@@ -360,6 +389,7 @@ export default function PropertyForm({ onSubmit, isLoading, autoOpenImport }: Pr
       <p className="mt-2 text-center text-gray-600 text-[11px]">
         Uses HM Land Registry sold prices where available
       </p>
+      </>}
     </form>
   );
 }

@@ -103,6 +103,15 @@ export default function App() {
     }
   };
 
+  // Scroll results into view when they appear
+  useEffect(() => {
+    if (result && !isLoading) {
+      setTimeout(() => {
+        document.getElementById('results')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }, 100);
+    }
+  }, [result, isLoading]);
+
   const showHero = !result && !isLoading;
 
   return (
@@ -143,6 +152,7 @@ export default function App() {
             onSubmit={handleAnalyze}
             isLoading={isLoading}
             autoOpenImport={autoOpenImport}
+            collapsed={!!(result && !isLoading)}
           />
 
           {error && (
@@ -164,7 +174,9 @@ export default function App() {
           {isLoading && <LoadingState />}
 
           {result && lastProperty && !isLoading && (
-            <AnalysisResults result={result} property={lastProperty} />
+            <div id="results">
+              <AnalysisResults result={result} property={lastProperty} />
+            </div>
           )}
         </main>
       </div>
