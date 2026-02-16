@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Header from './components/Header';
 import PropertyForm from './components/PropertyForm';
 import AnalysisResults from './components/AnalysisResults';
@@ -10,6 +10,25 @@ export default function App() {
   const [result, setResult] = useState<AnalysisResult | null>(null);
   const [lastProperty, setLastProperty] = useState<PropertyInput | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [demoMode, setDemoMode] = useState(false);
+  const [apiKeyConfigured, setApiKeyConfigured] = useState(false);
+
+  // Check if API key is configured on load
+  useEffect(() => {
+    fetch('/api/health')
+      .then((r) => r.json())
+      .then((data) => {
+        setApiKeyConfigured(data.apiKeyConfigured);
+        // Auto-enable demo mode if no API key
+        if (!data.apiKeyConfigured) {
+          setDemoMode(true);
+        }
+      })
+      .catch(() => {
+        // Server not reachable, enable demo mode
+        setDemoMode(true);
+      });
+  }, []);
 
   const handleAnalyze = async (property: PropertyInput) => {
     setIsLoading(true);
@@ -18,7 +37,8 @@ export default function App() {
     setLastProperty(property);
 
     try {
-      const response = await fetch('/api/analyze', {
+      const endpoint = demoMode ? '/api/demo' : '/api/analyze';
+      const response = await fetch(endpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(property),
@@ -30,6 +50,12 @@ export default function App() {
       }
 
       const data: AnalysisResult = await response.json();
+
+      // Brief delay in demo mode so loading animation is visible
+      if (demoMode) {
+        await new Promise((r) => setTimeout(r, 2000));
+      }
+
       setResult(data);
     } catch (err: any) {
       setError(err.message || 'Something went wrong. Please try again.');
@@ -49,16 +75,41 @@ export default function App() {
       <div className="relative z-10 pb-16">
         <Header />
 
-        <main className="px-4 mt-4">
+        {/* Demo mode toggle */}
+        <div className="max-w-4xl mx-auto px-4 mb-2 flex justify-end items-center gap-2">
+          {demoMode && !apiKeyConfigured && (
+            <span className="text-gray-500 text-xs">No API key detected</span>
+          )}
+          <button
+            onClick={() => setDemoMode(!demoMode)}
+            className={`text-xs px-3 py-1.5 rounded-full border transition-all ${
+              demoMode
+                ? 'border-gold bg-gold/10 text-gold'
+                : 'border-gray-700 text-gray-500 hover:border-gray-500'
+            }`}
+          >
+            {demoMode ? 'Demo Mode ON' : 'Demo Mode OFF'}
+          </button>
+        </div>
+
+        <main className="px-4 mt-2">
           <PropertyForm onSubmit={handleAnalyze} isLoading={isLoading} />
 
           {error && (
             <div className="w-full max-w-4xl mx-auto mt-6">
               <div className="bg-pe-red/10 border border-pe-red/30 rounded-xl p-4 text-center">
                 <p className="text-pe-red font-medium">{error}</p>
-                <p className="text-gray-400 text-sm mt-1">
-                  Check your API key and try again.
-                </p>
+                {!demoMode && (
+                  <button
+                    onClick={() => {
+                      setDemoMode(true);
+                      setError(null);
+                    }}
+                    className="mt-3 text-sm px-4 py-2 rounded-lg border border-gold bg-gold/10 text-gold hover:bg-gold/20 transition-all"
+                  >
+                    Switch to Demo Mode
+                  </button>
+                )}
               </div>
             </div>
           )}
