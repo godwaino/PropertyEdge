@@ -2,30 +2,27 @@ export interface PropertyInput {
   address: string;
   postcode: string;
   askingPrice: number;
-  propertyType: 'flat' | 'house';
+  propertyType: string;
   bedrooms: number;
   sizeSqm: number;
   yearBuilt: number;
-  tenure: 'freehold' | 'leasehold';
+  tenure: string;
   serviceCharge?: number;
   groundRent?: number;
   leaseYears?: number;
 }
 
-export interface Finding {
+export interface AnalysisItem {
   title: string;
   description: string;
   impact: number;
 }
 
 export interface AnalysisResult {
-  valuation: {
-    amount: number;
-    confidence: number;
-  };
-  verdict: 'FAIR' | 'GOOD_DEAL' | 'OVERPRICED';
+  valuation: { amount: number; confidence: number };
+  verdict: 'GOOD_DEAL' | 'FAIR' | 'OVERPRICED';
   savings: number;
-  red_flags: Finding[];
-  warnings: Finding[];
-  positives: Finding[];
+  red_flags: AnalysisItem[];
+  warnings: AnalysisItem[];
+  positives: AnalysisItem[];
 }

@@ -5,20 +5,25 @@ import fs from 'fs';
 import Anthropic from '@anthropic-ai/sdk';
 import dotenv from 'dotenv';
 
-// Try multiple possible .env locations
+// Load .env from multiple possible locations
 const envPaths = [
+  path.resolve(__dirname, '.env'),
+  path.resolve(__dirname, '..', '.env'),
   path.resolve(process.cwd(), '.env'),
   path.resolve(process.cwd(), '..', '.env'),
-  path.resolve(__dirname, '..', '.env'),
-  path.resolve(__dirname, '.env'),
 ];
 
+let envLoaded = false;
 for (const envPath of envPaths) {
   if (fs.existsSync(envPath)) {
-    console.log(`Loading .env from: ${envPath}`);
+    console.log(`Loaded .env from: ${envPath}`);
     dotenv.config({ path: envPath });
+    envLoaded = true;
     break;
   }
+}
+if (!envLoaded) {
+  console.log('No .env file found. Searched:', envPaths);
 }
 
 const app = express();
@@ -27,19 +32,23 @@ const PORT = process.env.PORT || 8080;
 app.use(cors());
 app.use(express.json());
 
-// Serve the built React frontend
+// Serve built React frontend
 const clientDist = path.join(__dirname, '..', 'client', 'dist');
-app.use(express.static(clientDist));
-
-if (!process.env.ANTHROPIC_API_KEY) {
-  console.error('ERROR: ANTHROPIC_API_KEY not found in environment.');
-  console.error('Searched these paths for .env:', envPaths);
-  console.error('Create a .env file in the project root: echo "ANTHROPIC_API_KEY=your-key" > .env');
+if (fs.existsSync(clientDist)) {
+  app.use(express.static(clientDist));
+  console.log(`Serving frontend from: ${clientDist}`);
+} else {
+  console.log(`Warning: No client build found at ${clientDist}. Run "npm run build" first.`);
 }
 
-const anthropic = new Anthropic({
-  apiKey: process.env.ANTHROPIC_API_KEY || '',
-});
+// Only create Anthropic client if key exists
+let anthropic: Anthropic | null = null;
+if (process.env.ANTHROPIC_API_KEY) {
+  anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+  console.log('Anthropic API key loaded.');
+} else {
+  console.log('No ANTHROPIC_API_KEY found. Live analysis disabled — demo mode still works.');
+}
 
 interface PropertyRequest {
   address: string;
@@ -55,7 +64,17 @@ interface PropertyRequest {
   leaseYears?: number;
 }
 
+// Live analysis endpoint (requires API key)
 app.post('/api/analyze', async (req, res) => {
+  if (!anthropic) {
+    res.status(500).json({
+      error: 'No API key configured',
+      message: 'Add ANTHROPIC_API_KEY to your .env file, then restart the server.',
+      hint: 'Use Demo Mode to preview the app without an API key.',
+    });
+    return;
+  }
+
   try {
     const property: PropertyRequest = req.body;
 
@@ -75,8 +94,8 @@ Property Details:
 
 Provide a thorough analysis considering:
 1. Fair market valuation based on location, size, type, and local market conditions
-2. Red flags - serious issues with financial impact >£5,000 (e.g., short lease, high service charges, structural concerns for the age, flooding risk for the area)
-3. Warnings - moderate concerns with £1,000-£5,000 impact (e.g., above-average ground rent, potential maintenance costs)
+2. Red flags - serious issues with financial impact >£5,000
+3. Warnings - moderate concerns with £1,000-£5,000 impact
 4. Positive factors - features that add value or reduce risk
 
 Be realistic and specific to the UK property market. Consider postcode-specific factors.
@@ -101,12 +120,7 @@ Where:
     const message = await anthropic.messages.create({
       model: 'claude-sonnet-4-20250514',
       max_tokens: 2048,
-      messages: [
-        {
-          role: 'user',
-          content: prompt,
-        },
-      ],
+      messages: [{ role: 'user', content: prompt }],
     });
 
     const content = message.content[0];
@@ -114,7 +128,6 @@ Where:
       throw new Error('Unexpected response type');
     }
 
-    // Parse the JSON from Claude's response
     const jsonMatch = content.text.match(/\{[\s\S]*\}/);
     if (!jsonMatch) {
       throw new Error('Could not parse JSON from response');
@@ -133,22 +146,20 @@ Where:
       message = 'Invalid API key. Check your ANTHROPIC_API_KEY in the .env file.';
     } else if (error?.status === 403) {
       status = 403;
-      message = 'API key does not have permission. Check your Anthropic account and billing.';
+      message = 'API key does not have permission. Check your Anthropic account billing.';
     } else if (error?.status === 429) {
       status = 429;
-      message = 'Rate limited. Too many requests — please wait a moment and try again.';
-    } else if (error?.status === 400) {
-      status = 400;
-      message = 'Bad request to Anthropic API: ' + (error?.message || 'unknown error');
+      message = 'Rate limited — please wait a moment and try again.';
     } else if (error?.status === 529 || error?.status === 503) {
       status = 503;
-      message = 'Anthropic API is temporarily overloaded. Please try again in a minute.';
-    } else if (error?.code === 'ENOTFOUND' || error?.code === 'ECONNREFUSED' || error?.code === 'ETIMEDOUT') {
+      message = 'Anthropic API is temporarily overloaded. Try again in a minute.';
+    } else if (
+      error?.code === 'ENOTFOUND' ||
+      error?.code === 'ECONNREFUSED' ||
+      error?.code === 'ETIMEDOUT'
+    ) {
       status = 503;
       message = 'Cannot reach Anthropic API. Check your internet connection.';
-    } else if (!process.env.ANTHROPIC_API_KEY) {
-      status = 500;
-      message = 'No API key configured. Add ANTHROPIC_API_KEY to your .env file.';
     } else if (error?.message) {
       message = error.message;
     }
@@ -156,12 +167,12 @@ Where:
     res.status(status).json({
       error: 'Analysis failed',
       message,
-      hint: 'Try enabling Demo Mode to preview the app without an API key.',
+      hint: 'Use Demo Mode to preview the app without an API key.',
     });
   }
 });
 
-// Demo endpoint - returns realistic mock data for recording without API credits
+// Demo endpoint — always works, no API key needed
 app.post('/api/demo', (req, res) => {
   const property: PropertyRequest = req.body;
   const price = property.askingPrice || 285000;
@@ -169,7 +180,7 @@ app.post('/api/demo', (req, res) => {
 
   res.json({
     valuation: { amount: valuation, confidence: 3.2 },
-    verdict: 'FAIR' as const,
+    verdict: 'FAIR',
     savings: price - valuation,
     red_flags: [
       {
@@ -186,7 +197,7 @@ app.post('/api/demo', (req, res) => {
     warnings: [
       {
         title: 'EWS1 Fire Safety Certificate',
-        description: `Properties built around ${property.yearBuilt || 2019} in this area may require an EWS1 form for external wall fire safety. If the building has cladding, obtaining this certificate can delay sales and potentially incur remediation costs.`,
+        description: `Properties built around ${property.yearBuilt || 2019} in this area may require an EWS1 form. If the building has cladding, obtaining this certificate can delay sales and incur remediation costs.`,
         impact: 4000,
       },
       {
@@ -196,7 +207,8 @@ app.post('/api/demo', (req, res) => {
       },
       {
         title: 'Potential Management Company Issues',
-        description: 'Leasehold flats in large developments can face management company disputes. Request the last 3 years of service charge accounts and check for any planned major works.',
+        description:
+          'Leasehold flats in large developments can face management company disputes. Request the last 3 years of service charge accounts and check for any planned major works.',
         impact: 3000,
       },
     ],
@@ -208,17 +220,18 @@ app.post('/api/demo', (req, res) => {
       },
       {
         title: 'Prime City Centre Location',
-        description: `${property.postcode || 'M3'} is a high-demand area with strong rental yields (5-6%) and consistent capital appreciation. Proximity to transport links, amenities and employment hubs supports long-term value.`,
+        description: `${property.postcode || 'M3'} is a high-demand area with strong rental yields (5-6%) and consistent capital appreciation. Proximity to transport links supports long-term value.`,
         impact: 20000,
       },
       {
         title: 'Good Size for Property Type',
-        description: `At ${property.sizeSqm || 85}sqm, this ${property.bedrooms || 2}-bed ${property.propertyType || 'flat'} is above average size for the area (typical ${property.bedrooms || 2}-beds are 55-70sqm). Larger units command premium prices and attract more buyers.`,
+        description: `At ${property.sizeSqm || 85}sqm, this ${property.bedrooms || 2}-bed ${property.propertyType || 'flat'} is above average size for the area. Larger units command premium prices.`,
         impact: 8000,
       },
       {
         title: '999-Year Lease',
-        description: 'With 999 years remaining, the lease length is effectively equivalent to freehold. No lease extension costs will be needed, eliminating one of the biggest leasehold risks.',
+        description:
+          'With 999 years remaining, the lease length is effectively equivalent to freehold. No lease extension costs will be needed.',
         impact: 10000,
       },
     ],
@@ -226,14 +239,26 @@ app.post('/api/demo', (req, res) => {
 });
 
 app.get('/api/health', (_req, res) => {
-  res.json({ status: 'ok', timestamp: new Date().toISOString() });
+  res.json({
+    status: 'ok',
+    apiKeyConfigured: !!process.env.ANTHROPIC_API_KEY,
+    timestamp: new Date().toISOString(),
+  });
 });
 
 // Serve React app for all non-API routes
 app.get('*', (_req, res) => {
-  res.sendFile(path.join(clientDist, 'index.html'));
+  const indexPath = path.join(clientDist, 'index.html');
+  if (fs.existsSync(indexPath)) {
+    res.sendFile(indexPath);
+  } else {
+    res.status(200).send(
+      '<h1>Property Edge v2</h1><p>Frontend not built yet. Run <code>npm run build</code> then restart.</p>'
+    );
+  }
 });
 
 app.listen(Number(PORT), '0.0.0.0', () => {
-  console.log(`Property Edge AI server running on http://0.0.0.0:${PORT}`);
+  console.log(`\nProperty Edge v2 running at http://localhost:${PORT}`);
+  console.log(`API key: ${process.env.ANTHROPIC_API_KEY ? 'configured' : 'NOT configured (demo mode only)'}\n`);
 });

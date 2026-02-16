@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Header from './components/Header';
 import PropertyForm from './components/PropertyForm';
 import AnalysisResults from './components/AnalysisResults';
@@ -11,6 +11,24 @@ export default function App() {
   const [lastProperty, setLastProperty] = useState<PropertyInput | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [demoMode, setDemoMode] = useState(false);
+  const [apiKeyConfigured, setApiKeyConfigured] = useState(false);
+
+  // Check if API key is configured on load
+  useEffect(() => {
+    fetch('/api/health')
+      .then((r) => r.json())
+      .then((data) => {
+        setApiKeyConfigured(data.apiKeyConfigured);
+        // Auto-enable demo mode if no API key
+        if (!data.apiKeyConfigured) {
+          setDemoMode(true);
+        }
+      })
+      .catch(() => {
+        // Server not reachable, enable demo mode
+        setDemoMode(true);
+      });
+  }, []);
 
   const handleAnalyze = async (property: PropertyInput) => {
     setIsLoading(true);
@@ -28,16 +46,14 @@ export default function App() {
 
       if (!response.ok) {
         const errData = await response.json().catch(() => ({}));
-        const msg = errData.message || `Analysis failed (${response.status})`;
-        const hint = errData.hint || '';
-        throw new Error(hint ? `${msg}||${hint}` : msg);
+        throw new Error(errData.message || `Analysis failed (${response.status})`);
       }
 
       const data: AnalysisResult = await response.json();
 
-      // Add a small delay in demo mode so the loading animation is visible
+      // Brief delay in demo mode so loading animation is visible
       if (demoMode) {
-        await new Promise((r) => setTimeout(r, 3000));
+        await new Promise((r) => setTimeout(r, 2000));
       }
 
       setResult(data);
@@ -60,7 +76,10 @@ export default function App() {
         <Header />
 
         {/* Demo mode toggle */}
-        <div className="max-w-4xl mx-auto px-4 mb-2 flex justify-end">
+        <div className="max-w-4xl mx-auto px-4 mb-2 flex justify-end items-center gap-2">
+          {demoMode && !apiKeyConfigured && (
+            <span className="text-gray-500 text-xs">No API key detected</span>
+          )}
           <button
             onClick={() => setDemoMode(!demoMode)}
             className={`text-xs px-3 py-1.5 rounded-full border transition-all ${
@@ -79,10 +98,7 @@ export default function App() {
           {error && (
             <div className="w-full max-w-4xl mx-auto mt-6">
               <div className="bg-pe-red/10 border border-pe-red/30 rounded-xl p-4 text-center">
-                <p className="text-pe-red font-medium">{error.split('||')[0]}</p>
-                <p className="text-gray-400 text-sm mt-2">
-                  {error.split('||')[1] || 'Check your API key or enable Demo Mode.'}
-                </p>
+                <p className="text-pe-red font-medium">{error}</p>
                 {!demoMode && (
                   <button
                     onClick={() => {
