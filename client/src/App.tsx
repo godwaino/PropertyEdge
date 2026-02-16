@@ -15,6 +15,8 @@ export default function App() {
   const [apiKeyConfigured, setApiKeyConfigured] = useState(false);
   const [autoOpenImport, setAutoOpenImport] = useState(false);
   const [isExtracting, setIsExtracting] = useState(false);
+  const [selectedPersona, setSelectedPersona] = useState<string | null>(null);
+  const [formVisible, setFormVisible] = useState(false);
 
   useEffect(() => {
     fetch('/api/health')
@@ -27,6 +29,7 @@ export default function App() {
   }, []);
 
   const handleAnalyseClick = () => {
+    setFormVisible(true);
     setAutoOpenImport(true);
     setTimeout(() => {
       document.getElementById('analyze')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -126,17 +129,23 @@ export default function App() {
 
         <div className="max-w-4xl mx-auto px-4 mb-2 flex justify-end items-center gap-2">
           {demoMode && !apiKeyConfigured && (
-            <span className="text-gray-500 text-xs">No API key detected</span>
+            <span className="text-gray-500 text-xs">No API key &mdash; using sample data</span>
           )}
           <button
-            onClick={() => setDemoMode(!demoMode)}
+            onClick={() => {
+              if (!demoMode) {
+                setDemoMode(true);
+              } else if (apiKeyConfigured) {
+                setDemoMode(false);
+              }
+            }}
             className={`text-xs px-3 py-1.5 rounded-full border transition-all ${
               demoMode
                 ? 'border-gold bg-gold/10 text-gold'
                 : 'border-gray-700 text-gray-500 hover:border-gray-500'
             }`}
           >
-            {demoMode ? 'Demo Mode ON' : 'Demo Mode OFF'}
+            {demoMode ? 'Try a demo' : 'Live Mode'}
           </button>
         </div>
 
@@ -145,15 +154,19 @@ export default function App() {
           onExtractListing={handleExtractListing}
           visible={showHero}
           isExtracting={isExtracting}
+          selectedPersona={selectedPersona}
+          onPersonaSelect={(p) => setSelectedPersona(p || null)}
         />
 
         <main className="px-4 mt-2">
-          <PropertyForm
-            onSubmit={handleAnalyze}
-            isLoading={isLoading}
-            autoOpenImport={autoOpenImport}
-            collapsed={!!(result && !isLoading)}
-          />
+          {formVisible && (
+            <PropertyForm
+              onSubmit={handleAnalyze}
+              isLoading={isLoading}
+              autoOpenImport={autoOpenImport}
+              collapsed={!!(result && !isLoading)}
+            />
+          )}
 
           {error && (
             <div className="w-full max-w-4xl mx-auto mt-6">
