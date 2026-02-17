@@ -88,8 +88,10 @@ function validateProperty(body: any): { valid: boolean; error?: string } {
   if (!body.postcode || typeof body.postcode !== 'string' || !/^[A-Z]{1,2}\d[A-Z\d]?(\s*\d[A-Z]{2})?$/i.test(body.postcode.trim())) return { valid: false, error: 'Invalid UK postcode (e.g. "M3 4LQ" or just "M3")' };
   if (typeof body.askingPrice !== 'number' || body.askingPrice < 1000 || body.askingPrice > 100_000_000) return { valid: false, error: 'Asking price must be between £1,000 and £100,000,000' };
   if (typeof body.bedrooms !== 'number' || body.bedrooms < 0 || body.bedrooms > 20) return { valid: false, error: 'Bedrooms must be 0-20' };
-  if (typeof body.sizeSqm !== 'number' || body.sizeSqm < 5 || body.sizeSqm > 10000) return { valid: false, error: 'Size must be 5-10,000 sqm' };
-  if (typeof body.yearBuilt !== 'number' || body.yearBuilt < 1500 || body.yearBuilt > new Date().getFullYear() + 2) return { valid: false, error: 'Invalid year built' };
+  if (typeof body.sizeSqm !== 'number' || body.sizeSqm < 0 || body.sizeSqm > 10000) return { valid: false, error: 'Size must be 0-10,000 sqm' };
+  if (body.sizeSqm > 0 && body.sizeSqm < 5) return { valid: false, error: 'Size must be at least 5 sqm' };
+  if (typeof body.yearBuilt !== 'number' || body.yearBuilt < 0 || body.yearBuilt > new Date().getFullYear() + 2) return { valid: false, error: 'Invalid year built' };
+  if (body.yearBuilt > 0 && body.yearBuilt < 1500) return { valid: false, error: 'Year built must be 1500 or later' };
   return { valid: true };
 }
 
@@ -1274,6 +1276,59 @@ app.post('/api/analyze', rateLimit, async (req, res) => {
       dataSources.push('EPC Register');
     }
 
+    // Infer sizeSqm from EPC floor areas if not provided
+    if (!property.sizeSqm || property.sizeSqm <= 0) {
+      if (epcData.size > 0) {
+        const areas: number[] = [];
+        for (const entry of epcData.values()) {
+          if (entry.floorArea > 0) areas.push(entry.floorArea);
+        }
+        if (areas.length > 0) {
+          areas.sort((a, b) => a - b);
+          property.sizeSqm = areas[Math.floor(areas.length / 2)]; // median
+        }
+      }
+      // Final fallback: estimate from bedrooms + type
+      if (!property.sizeSqm || property.sizeSqm <= 0) {
+        const avgSqmPerBed: Record<string, number> = {
+          flat: 32, terraced: 30, 'semi-detached': 32, detached: 38, bungalow: 34,
+        };
+        const perBed = avgSqmPerBed[property.propertyType] || 30;
+        property.sizeSqm = Math.round(perBed * Math.max(property.bedrooms, 1) + 15);
+      }
+    }
+
+    // Infer yearBuilt from EPC construction-age-band if not provided
+    if (!property.yearBuilt || property.yearBuilt <= 0) {
+      let inferredYear: number | null = null;
+      if (epcData.size > 0) {
+        const ageBands: number[] = [];
+        for (const entry of epcData.values()) {
+          if (entry.constructionYear) {
+            const yearMatch = entry.constructionYear.match(/(\d{4})\s*-\s*(\d{4})/);
+            if (yearMatch) {
+              ageBands.push(Math.round((parseInt(yearMatch[1]) + parseInt(yearMatch[2])) / 2));
+            } else {
+              const singleYear = entry.constructionYear.match(/(\d{4})/);
+              if (singleYear) ageBands.push(parseInt(singleYear[1]));
+            }
+          }
+        }
+        if (ageBands.length > 0) {
+          ageBands.sort((a, b) => a - b);
+          inferredYear = ageBands[Math.floor(ageBands.length / 2)];
+        }
+      }
+      if (!inferredYear && comparablesRaw.length > 0) {
+        const newBuilds = comparablesRaw.filter(c => c.newBuild);
+        if (newBuilds.length > 0) {
+          const dates = newBuilds.map(c => new Date(c.date).getFullYear()).sort();
+          inferredYear = dates[0];
+        }
+      }
+      property.yearBuilt = inferredYear || 0;
+    }
+
     // Enrich: outlier detection
     comparables = detectOutliers(comparables, property.propertyType);
 
@@ -1400,8 +1455,8 @@ Your task: determine the REALISTIC fair market value of this property, then advi
 
 Property Details:
 - Address: ${property.address}, ${property.postcode}
-- Type: ${property.propertyType}, ${property.bedrooms} bedrooms, ${property.sizeSqm}sqm
-- Year Built: ${property.yearBuilt}
+- Type: ${property.propertyType}, ${property.bedrooms} bedrooms, ${property.sizeSqm > 0 ? `${property.sizeSqm}sqm` : 'size unknown (use EPC area data below)'}
+- Year Built: ${property.yearBuilt > 0 ? property.yearBuilt : 'unknown (use EPC/comparable data below)'}
 - Tenure: ${property.tenure}${leaseholdInfo}
 ${comparablesText}
 ${areaData.epcSummary ? `\nAREA EPC DATA (Energy Performance Certificates):

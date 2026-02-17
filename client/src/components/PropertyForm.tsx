@@ -27,8 +27,8 @@ const defaults: FormFields = {
   askingPrice: '285000',
   propertyType: 'flat',
   bedrooms: '2',
-  sizeSqm: '85',
-  yearBuilt: '2019',
+  sizeSqm: '',
+  yearBuilt: '',
   serviceCharge: '1200',
   groundRent: '250',
   leaseYears: '999',
@@ -135,7 +135,7 @@ export default function PropertyForm({ onSubmit, isLoading, autoOpenImport, coll
       propertyType: fields.propertyType,
       bedrooms: Number(fields.bedrooms),
       sizeSqm: Number(fields.sizeSqm) || 0,
-      yearBuilt: Number(fields.yearBuilt) || 2000,
+      yearBuilt: Number(fields.yearBuilt) || 0,
       tenure,
     };
 
@@ -315,9 +315,9 @@ export default function PropertyForm({ onSubmit, isLoading, autoOpenImport, coll
                 className={inputClass}
                 value={fields.sizeSqm}
                 onChange={(e) => setField('sizeSqm', e.target.value)}
-                placeholder="Leave blank if unknown"
+                placeholder="From EPC if blank"
               />
-              <p className={helperClass}>Approx is fine</p>
+              <p className={helperClass}>Inferred from EPC register if blank</p>
             </div>
 
             <div>
@@ -327,12 +327,12 @@ export default function PropertyForm({ onSubmit, isLoading, autoOpenImport, coll
                 className={errors.yearBuilt ? errorInputClass : inputClass}
                 value={fields.yearBuilt}
                 onChange={(e) => setField('yearBuilt', e.target.value)}
-                placeholder="e.g. 1990"
+                placeholder="From EPC if blank"
               />
               {errors.yearBuilt ? (
                 <p className={errorClass}>{errors.yearBuilt}</p>
               ) : (
-                <p className={helperClass}>Estimate OK</p>
+                <p className={helperClass}>Inferred from EPC register if blank</p>
               )}
             </div>
 
