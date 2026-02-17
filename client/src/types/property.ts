@@ -23,6 +23,10 @@ export interface ComparableSale {
   date: string;
   address: string;
   propertyType: string;
+  distance?: number;       // miles from subject property
+  similarity?: number;     // 0-100 score
+  excluded?: boolean;      // true if outlier
+  excludeReason?: string;  // e.g. "Extreme outlier (farm)"
 }
 
 export interface NegotiationData {
@@ -30,10 +34,16 @@ export interface NegotiationData {
   offer_high: number;
   walk_away: number;
   reasoning: string;
+  negotiation_points?: string[];  // Top 3 evidence-backed talking points
 }
 
 export interface AnalysisResult {
-  valuation: { amount: number; confidence: number; basis?: string };
+  valuation: {
+    amount: number;
+    confidence: number;
+    basis?: string;
+    confidence_drivers?: string[];  // why confidence is high/low
+  };
   verdict: 'GOOD_DEAL' | 'FAIR' | 'OVERPRICED';
   savings: number;
   summary?: string;

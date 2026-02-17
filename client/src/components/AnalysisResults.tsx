@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { AnalysisResult, AnalysisItem, PropertyInput } from '../types/property';
+import { useState, useMemo } from 'react';
+import { AnalysisResult, AnalysisItem, PropertyInput, ComparableSale } from '../types/property';
 
 interface Props {
   result: AnalysisResult;
@@ -30,13 +30,43 @@ function VerdictBadge({ verdict }: { verdict: string }) {
   );
 }
 
-function ConfidenceLabel({ confidence }: { confidence: number }) {
+function ConfidenceLabel({ confidence, drivers }: { confidence: number; drivers?: string[] }) {
+  const [showDrivers, setShowDrivers] = useState(false);
   let level: string;
   let color: string;
   if (confidence <= 8) { level = 'High'; color = 'text-cyan'; }
   else if (confidence <= 14) { level = 'Medium'; color = 'text-gold'; }
   else { level = 'Low'; color = 'text-pe-red'; }
-  return <span className={`text-xs font-medium ${color}`}>{level} confidence (±{confidence}%)</span>;
+
+  return (
+    <div className="relative inline-block">
+      <button
+        onClick={() => setShowDrivers(!showDrivers)}
+        className={`text-xs font-medium ${color} underline underline-offset-2 decoration-dotted cursor-pointer hover:opacity-80 transition-opacity`}
+      >
+        {level} confidence (±{confidence}%)
+      </button>
+      {showDrivers && drivers && drivers.length > 0 && (
+        <div className="absolute z-10 top-full left-1/2 -translate-x-1/2 mt-2 w-64 bg-navy-light border border-gray-700 rounded-xl p-3 shadow-lg">
+          <p className="text-gray-400 text-[10px] uppercase tracking-wider mb-1.5 font-medium">Why {level.toLowerCase()} confidence</p>
+          <ul className="space-y-1">
+            {drivers.map((d, i) => (
+              <li key={i} className="flex items-start gap-1.5 text-xs text-gray-300">
+                <span className={`mt-1 w-1.5 h-1.5 rounded-full flex-shrink-0 ${color === 'text-cyan' ? 'bg-cyan' : color === 'text-gold' ? 'bg-gold' : 'bg-pe-red'}`} />
+                {d}
+              </li>
+            ))}
+          </ul>
+          <button
+            onClick={(e) => { e.stopPropagation(); setShowDrivers(false); }}
+            className="text-gray-500 text-[10px] mt-2 hover:text-gray-300"
+          >
+            Close
+          </button>
+        </div>
+      )}
+    </div>
+  );
 }
 
 function CollapsibleSection({
@@ -99,6 +129,125 @@ function CollapsibleSection({
   );
 }
 
+type CompSort = 'similarity' | 'newest' | 'nearest' | 'price';
+
+function CompsTable({ comparables }: { comparables: ComparableSale[] }) {
+  const [sort, setSort] = useState<CompSort>('similarity');
+
+  const sorted = useMemo(() => {
+    const included = comparables.filter(c => !c.excluded);
+    const excluded = comparables.filter(c => c.excluded);
+
+    const sortFns: Record<CompSort, (a: ComparableSale, b: ComparableSale) => number> = {
+      similarity: (a, b) => (b.similarity || 0) - (a.similarity || 0),
+      newest: (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime(),
+      nearest: (a, b) => (a.distance || 99) - (b.distance || 99),
+      price: (a, b) => a.price - b.price,
+    };
+
+    included.sort(sortFns[sort]);
+    return [...included, ...excluded];
+  }, [comparables, sort]);
+
+  const chips: { key: CompSort; label: string }[] = [
+    { key: 'similarity', label: 'Most similar' },
+    { key: 'newest', label: 'Newest' },
+    { key: 'nearest', label: 'Nearest' },
+    { key: 'price', label: 'Price' },
+  ];
+
+  return (
+    <div className="mt-3">
+      {/* Sort chips */}
+      <div className="flex gap-2 mb-3 flex-wrap">
+        {chips.map(chip => (
+          <button
+            key={chip.key}
+            onClick={() => setSort(chip.key)}
+            className={`text-[11px] px-2.5 py-1 rounded-full border transition-colors ${
+              sort === chip.key
+                ? 'border-cyan/50 text-cyan bg-cyan/10'
+                : 'border-gray-700 text-gray-400 hover:text-gray-300 hover:border-gray-600'
+            }`}
+          >
+            {chip.label}
+          </button>
+        ))}
+      </div>
+
+      <div className="overflow-x-auto">
+        <table className="w-full text-xs">
+          <thead>
+            <tr className="text-gray-500 uppercase tracking-wider border-b border-gray-800">
+              <th className="text-left py-2 pr-3">Price</th>
+              <th className="text-left py-2 pr-3">Date</th>
+              <th className="text-left py-2 pr-3">Address</th>
+              <th className="text-left py-2 pr-3">Type</th>
+              <th className="text-center py-2 pr-3">Dist.</th>
+              <th className="text-center py-2 pr-3">Match</th>
+              <th className="text-left py-2">Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            {sorted.map((c, i) => (
+              <tr
+                key={i}
+                className={`border-b border-gray-800/50 ${
+                  c.excluded ? 'opacity-50' : 'text-gray-300'
+                }`}
+              >
+                <td className={`py-2 pr-3 font-medium ${c.excluded ? 'text-gray-500 line-through' : 'text-white'}`}>
+                  {fmt(c.price)}
+                </td>
+                <td className="py-2 pr-3">{c.date}</td>
+                <td className="py-2 pr-3 max-w-[180px] truncate">{c.address}</td>
+                <td className="py-2 pr-3 capitalize">{c.propertyType}</td>
+                <td className="py-2 pr-3 text-center">
+                  {c.distance !== undefined ? `${c.distance}mi` : '—'}
+                </td>
+                <td className="py-2 pr-3 text-center">
+                  {!c.excluded && c.similarity !== undefined ? (
+                    <span className={`inline-block px-1.5 py-0.5 rounded text-[10px] font-medium ${
+                      c.similarity >= 70 ? 'bg-cyan/10 text-cyan' :
+                      c.similarity >= 40 ? 'bg-gold/10 text-gold' :
+                      'bg-gray-700 text-gray-400'
+                    }`}>
+                      {c.similarity}
+                    </span>
+                  ) : '—'}
+                </td>
+                <td className="py-2">
+                  {c.excluded ? (
+                    <span className="inline-block px-1.5 py-0.5 rounded text-[10px] font-medium bg-pe-red/10 text-pe-red whitespace-nowrap" title={c.excludeReason}>
+                      Excluded
+                    </span>
+                  ) : (
+                    <span className="inline-block px-1.5 py-0.5 rounded text-[10px] font-medium bg-cyan/10 text-cyan">
+                      Included
+                    </span>
+                  )}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+
+        {/* Excluded reasons */}
+        {sorted.some(c => c.excluded) && (
+          <div className="mt-2 space-y-1">
+            {sorted.filter(c => c.excluded).map((c, i) => (
+              <p key={i} className="text-[10px] text-gray-500 flex items-center gap-1">
+                <span className="w-1.5 h-1.5 rounded-full bg-pe-red/50 flex-shrink-0" />
+                {c.address}: {c.excludeReason}
+              </p>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function buildAgentQuestions(property: PropertyInput, result: AnalysisResult): string[] {
   const questions: string[] = [];
   if (property.tenure === 'leasehold') {
@@ -123,10 +272,26 @@ function buildAgentQuestions(property: PropertyInput, result: AnalysisResult): s
 function buildEmailDraft(property: PropertyInput, result: AnalysisResult): string {
   const neg = result.negotiation;
   let body = `Dear Agent,\n\nI am interested in the property at ${property.address}, ${property.postcode} (asking ${fmt(property.askingPrice)}).\n\n`;
+
+  // Verdict + fair value
+  body += `My research suggests a fair value of approximately ${fmt(result.valuation.amount)}, which is ${
+    result.verdict === 'OVERPRICED' ? 'below the current asking price' :
+    result.verdict === 'GOOD_DEAL' ? 'above the current asking price' :
+    'broadly in line with the asking price'
+  }.\n\n`;
+
   if (neg) {
-    body += `Based on my research of local comparable sales, I would like to make an initial offer of ${fmt(neg.offer_low)}.\n\n`;
+    body += `I would like to make an initial offer of ${fmt(neg.offer_low)}, with a view to agreeing around ${fmt(neg.offer_high)}.\n\n`;
     body += `My reasoning:\n${neg.reasoning}\n\n`;
+
+    // Top talking points
+    if (neg.negotiation_points && neg.negotiation_points.length > 0) {
+      body += `Key observations:\n`;
+      neg.negotiation_points.forEach((p, i) => { body += `${i + 1}. ${p}\n`; });
+      body += '\n';
+    }
   }
+
   body += `I would appreciate answers to the following questions:\n`;
   const qs = buildAgentQuestions(property, result);
   qs.forEach((q, i) => { body += `${i + 1}. ${q}\n`; });
@@ -136,6 +301,7 @@ function buildEmailDraft(property: PropertyInput, result: AnalysisResult): strin
 
 export default function AnalysisResults({ result, property }: Props) {
   const [showComps, setShowComps] = useState(false);
+  const [showMethodology, setShowMethodology] = useState(false);
   const [copiedBtn, setCopiedBtn] = useState<string | null>(null);
 
   const copyText = (text: string, id: string) => {
@@ -145,14 +311,15 @@ export default function AnalysisResults({ result, property }: Props) {
   };
 
   const agentQuestions = buildAgentQuestions(property, result);
+  const neg = result.negotiation;
 
   // Build the one-liner verdict
   const savingsAbs = Math.abs(result.savings);
   const verdictOneLiner = result.verdict === 'GOOD_DEAL'
-    ? `Overall: ${verdictLabel(result.verdict)} at ${fmt(property.askingPrice)} \u2014 ${fmt(savingsAbs)} below our valuation of ${fmt(result.valuation.amount)}.`
+    ? `Overall: ${verdictLabel(result.verdict)} at ${fmt(property.askingPrice)} — ${fmt(savingsAbs)} below our valuation of ${fmt(result.valuation.amount)}.`
     : result.verdict === 'OVERPRICED'
-    ? `Overall: ${verdictLabel(result.verdict)} at ${fmt(property.askingPrice)} \u2014 ${fmt(savingsAbs)} above our valuation of ${fmt(result.valuation.amount)}.`
-    : `Overall: ${verdictLabel(result.verdict)} at ${fmt(property.askingPrice)} \u2014 close to our valuation of ${fmt(result.valuation.amount)}.`;
+    ? `Overall: ${verdictLabel(result.verdict)} at ${fmt(property.askingPrice)} — ${fmt(savingsAbs)} above our valuation of ${fmt(result.valuation.amount)}.`
+    : `Overall: ${verdictLabel(result.verdict)} at ${fmt(property.askingPrice)} — close to our valuation of ${fmt(result.valuation.amount)}.`;
 
   return (
     <div className="w-full max-w-4xl mx-auto mt-8 animate-slide-up space-y-4">
@@ -173,7 +340,10 @@ export default function AnalysisResults({ result, property }: Props) {
           <p className="text-2xl font-bold text-white">{fmt(result.valuation.amount)}</p>
           <p className="text-gray-500 text-xs mt-1">Asking: {fmt(property.askingPrice)}</p>
           <div className="mt-2">
-            <ConfidenceLabel confidence={result.valuation.confidence} />
+            <ConfidenceLabel
+              confidence={result.valuation.confidence}
+              drivers={result.valuation.confidence_drivers}
+            />
           </div>
           {result.comparables_used !== undefined && result.comparables_used > 0 && (
             <button
@@ -192,10 +362,10 @@ export default function AnalysisResults({ result, property }: Props) {
         <div className="bg-navy-card border border-gray-800 rounded-2xl p-5 flex flex-col items-center justify-center">
           <VerdictBadge verdict={result.verdict} />
           {result.savings > 0 && (
-            <p className="text-cyan text-sm mt-2">Save {fmt(result.savings)}</p>
+            <p className="text-pe-red text-sm mt-2">Overpay risk: {fmt(result.savings)}</p>
           )}
           {result.savings < 0 && (
-            <p className="text-pe-red text-sm mt-2">{fmt(result.savings)} over valuation</p>
+            <p className="text-cyan text-sm mt-2">Negotiation headroom: ~{fmt(savingsAbs)}</p>
           )}
           {result.savings === 0 && (
             <p className="text-gray-400 text-sm mt-2">At valuation</p>
@@ -232,14 +402,15 @@ export default function AnalysisResults({ result, property }: Props) {
       </div>
 
       {/* Negotiation Playbook */}
-      {result.negotiation && (
+      {neg && (
         <div id="section-negotiation" className="bg-navy-card border border-cyan/20 rounded-2xl p-5">
           <div className="flex items-center justify-between mb-3">
             <h3 className="text-white font-semibold text-sm">Negotiation Playbook</h3>
             <div className="flex items-center gap-2">
               <button
                 onClick={() => {
-                  const text = `Suggested offer: ${fmt(result.negotiation!.offer_low)} - ${fmt(result.negotiation!.offer_high)}\nWalk away above: ${fmt(result.negotiation!.walk_away)}\n\n${result.negotiation!.reasoning}\n\nAgent questions:\n${agentQuestions.map((q, i) => `${i + 1}. ${q}`).join('\n')}`;
+                  const points = neg.negotiation_points?.map((p, i) => `${i + 1}. ${p}`).join('\n') || '';
+                  const text = `Suggested offer: ${fmt(neg.offer_low)} - ${fmt(neg.offer_high)}\nWalk away above: ${fmt(neg.walk_away)}\n\n${neg.reasoning}\n\n${points ? `Key talking points:\n${points}\n\n` : ''}Agent questions:\n${agentQuestions.map((q, i) => `${i + 1}. ${q}`).join('\n')}`;
                   copyText(text, 'summary');
                 }}
                 className="text-[11px] px-2 py-1 rounded border border-gray-700 text-gray-400 hover:text-cyan hover:border-cyan/50 transition-colors"
@@ -261,19 +432,34 @@ export default function AnalysisResults({ result, property }: Props) {
           <div className="grid grid-cols-3 gap-3 mb-4">
             <div className="text-center">
               <p className="text-gray-500 text-[11px] uppercase">Open at</p>
-              <p className="text-cyan font-bold text-lg">{fmt(result.negotiation.offer_low)}</p>
+              <p className="text-cyan font-bold text-lg">{fmt(neg.offer_low)}</p>
             </div>
             <div className="text-center">
               <p className="text-gray-500 text-[11px] uppercase">Aim for</p>
-              <p className="text-white font-bold text-lg">{fmt(result.negotiation.offer_high)}</p>
+              <p className="text-white font-bold text-lg">{fmt(neg.offer_high)}</p>
             </div>
             <div className="text-center">
               <p className="text-gray-500 text-[11px] uppercase">Walk away</p>
-              <p className="text-pe-red font-bold text-lg">{fmt(result.negotiation.walk_away)}</p>
+              <p className="text-pe-red font-bold text-lg">{fmt(neg.walk_away)}</p>
             </div>
           </div>
 
-          <p className="text-gray-400 text-xs leading-relaxed mb-4">{result.negotiation.reasoning}</p>
+          <p className="text-gray-400 text-xs leading-relaxed mb-4">{neg.reasoning}</p>
+
+          {/* Top 3 negotiation talking points */}
+          {neg.negotiation_points && neg.negotiation_points.length > 0 && (
+            <div className="border-t border-gray-800 pt-3 mb-4">
+              <p className="text-gray-400 text-xs uppercase tracking-wider mb-2 font-medium">Key talking points</p>
+              <div className="space-y-2">
+                {neg.negotiation_points.map((point, i) => (
+                  <div key={i} className="flex items-start gap-2 bg-navy-light/50 border border-cyan/10 rounded-lg p-2.5">
+                    <span className="text-cyan font-bold text-xs mt-0.5 flex-shrink-0">{i + 1}.</span>
+                    <span className="text-gray-300 text-xs leading-relaxed">{point}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
 
           {/* Agent questions checklist */}
           <div className="border-t border-gray-800 pt-3">
@@ -300,43 +486,88 @@ export default function AnalysisResults({ result, property }: Props) {
             <div className="flex items-center gap-2">
               <span className={`inline-block transition-transform text-xs text-gray-500 ${showComps ? 'rotate-90' : ''}`}>&#9654;</span>
               <h3 className="text-white font-semibold text-sm">Land Registry Comparables</h3>
-              <span className="text-gray-500 text-xs">({result.comparables.length} sales)</span>
+              <span className="text-gray-500 text-xs">
+                ({result.comparables.filter(c => !c.excluded).length} included
+                {result.comparables.some(c => c.excluded) && (
+                  <>, {result.comparables.filter(c => c.excluded).length} excluded</>
+                )})
+              </span>
             </div>
           </button>
 
-          {showComps && (
-            <div className="mt-3 overflow-x-auto">
-              <table className="w-full text-xs">
-                <thead>
-                  <tr className="text-gray-500 uppercase tracking-wider border-b border-gray-800">
-                    <th className="text-left py-2 pr-4">Price</th>
-                    <th className="text-left py-2 pr-4">Date</th>
-                    <th className="text-left py-2 pr-4">Address</th>
-                    <th className="text-left py-2">Type</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {result.comparables.map((c, i) => (
-                    <tr key={i} className="border-b border-gray-800/50 text-gray-300">
-                      <td className="py-2 pr-4 font-medium text-white">{fmt(c.price)}</td>
-                      <td className="py-2 pr-4">{c.date}</td>
-                      <td className="py-2 pr-4 max-w-[200px] truncate">{c.address}</td>
-                      <td className="py-2 capitalize">{c.propertyType}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
+          {showComps && <CompsTable comparables={result.comparables} />}
         </div>
       )}
 
-      {/* Valuation basis */}
-      {result.valuation.basis && (
-        <div className="px-2">
-          <p className="text-gray-600 text-[11px] leading-relaxed">{result.valuation.basis}</p>
-        </div>
-      )}
+      {/* How valuation was calculated — collapsible */}
+      <div className="bg-navy-card border border-gray-800 rounded-2xl p-5">
+        <button
+          onClick={() => setShowMethodology(!showMethodology)}
+          className="w-full flex items-center justify-between"
+        >
+          <div className="flex items-center gap-2">
+            <span className={`inline-block transition-transform text-xs text-gray-500 ${showMethodology ? 'rotate-90' : ''}`}>&#9654;</span>
+            <h3 className="text-white font-semibold text-sm">How valuation was calculated</h3>
+          </div>
+        </button>
+
+        {showMethodology && (
+          <div className="mt-3 space-y-3">
+            {/* Basis text */}
+            {result.valuation.basis && (
+              <p className="text-gray-400 text-xs leading-relaxed">{result.valuation.basis}</p>
+            )}
+
+            {/* Comps used summary */}
+            {result.comparables && result.comparables.length > 0 && (
+              <div>
+                <p className="text-gray-500 text-[10px] uppercase tracking-wider mb-1 font-medium">Comparables used</p>
+                <p className="text-gray-400 text-xs">
+                  {result.comparables.filter(c => !c.excluded).length} sales included in valuation
+                  {result.comparables.some(c => c.excluded) && (
+                    <>, {result.comparables.filter(c => c.excluded).length} excluded as outliers</>
+                  )}
+                </p>
+              </div>
+            )}
+
+            {/* Confidence drivers */}
+            {result.valuation.confidence_drivers && result.valuation.confidence_drivers.length > 0 && (
+              <div>
+                <p className="text-gray-500 text-[10px] uppercase tracking-wider mb-1 font-medium">Confidence factors</p>
+                <ul className="space-y-1">
+                  {result.valuation.confidence_drivers.map((d, i) => (
+                    <li key={i} className="text-gray-400 text-xs flex items-start gap-1.5">
+                      <span className="w-1 h-1 rounded-full bg-gray-500 mt-1.5 flex-shrink-0" />
+                      {d}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
+            {/* Adjustments applied */}
+            <div>
+              <p className="text-gray-500 text-[10px] uppercase tracking-wider mb-1 font-medium">Adjustments considered</p>
+              <ul className="space-y-1 text-gray-400 text-xs">
+                <li className="flex items-start gap-1.5">
+                  <span className="w-1 h-1 rounded-full bg-gray-500 mt-1.5 flex-shrink-0" />
+                  Property type: {property.propertyType}, {property.bedrooms} bed, {property.sizeSqm}sqm
+                </li>
+                <li className="flex items-start gap-1.5">
+                  <span className="w-1 h-1 rounded-full bg-gray-500 mt-1.5 flex-shrink-0" />
+                  Year built: {property.yearBuilt} ({new Date().getFullYear() - property.yearBuilt} years old)
+                </li>
+                <li className="flex items-start gap-1.5">
+                  <span className="w-1 h-1 rounded-full bg-gray-500 mt-1.5 flex-shrink-0" />
+                  Tenure: {property.tenure}
+                  {property.tenure === 'leasehold' && property.leaseYears ? ` (${property.leaseYears} years remaining)` : ''}
+                </li>
+              </ul>
+            </div>
+          </div>
+        )}
+      </div>
 
       {/* Collapsible detail sections */}
       <div id="section-risks" className="bg-navy-card border border-gray-800 rounded-2xl p-5 space-y-1">
@@ -350,6 +581,11 @@ export default function AnalysisResults({ result, property }: Props) {
           <CollapsibleSection title="Positives" items={result.positives} color="cyan" />
         )}
       </div>
+
+      {/* Disclaimer */}
+      <p className="text-gray-600 text-[10px] text-center leading-relaxed px-4">
+        Guidance only — not a formal valuation. Verify with a RICS surveyor or qualified agent before making offers.
+      </p>
     </div>
   );
 }
