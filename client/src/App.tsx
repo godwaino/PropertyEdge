@@ -14,7 +14,7 @@ export default function App() {
   const [result, setResult] = useState<AnalysisResult | null>(null);
   const [lastProperty, setLastProperty] = useState<PropertyInput | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [demoMode, setDemoMode] = useState(false);
+  const [demoMode, setDemoMode] = useState(true);
   const [apiKeyConfigured, setApiKeyConfigured] = useState(false);
   const [autoOpenImport, setAutoOpenImport] = useState(false);
   const [isExtracting, setIsExtracting] = useState(false);
@@ -101,11 +101,6 @@ export default function App() {
       }
 
       const data: AnalysisResult = await response.json();
-
-      if (demoMode) {
-        await new Promise((r) => setTimeout(r, 2000));
-      }
-
       setResult(data);
     } catch (err: any) {
       setError(err.message || 'Something went wrong. Please try again.');
@@ -157,27 +152,7 @@ export default function App() {
       <div className="relative z-10 pb-8">
         <Header onReset={handleReset} isDark={isDark} onToggleTheme={toggleTheme} />
 
-        <div className="max-w-4xl mx-auto px-4 mb-2 flex justify-end items-center gap-2">
-          {demoMode && !apiKeyConfigured && (
-            <span className="text-th-muted text-xs">No API key &mdash; using sample data</span>
-          )}
-          <button
-            onClick={() => {
-              if (!demoMode) {
-                setDemoMode(true);
-              } else if (apiKeyConfigured) {
-                setDemoMode(false);
-              }
-            }}
-            className={`text-xs px-3 py-1.5 rounded-full border transition-all ${
-              demoMode
-                ? 'border-gold bg-gold/10 text-gold'
-                : 'border-th-border text-th-muted hover:border-th-muted'
-            }`}
-          >
-            {demoMode ? 'Try a demo' : 'Live Mode'}
-          </button>
-        </div>
+        {/* Live/Demo toggle hidden — demo mode only for now */}
 
         <Hero
           onAnalyseClick={handleAnalyseClick}

@@ -1868,8 +1868,49 @@ app.post('/api/demo', rateLimit, async (req, res) => {
       valuation = Math.round(valuation * 0.85 / 1000) * 1000;
     }
 
+    // --- Area data adjustments (applied to comparable-based valuation) ---
+    const adjustments: string[] = [];
+
+    // Flood risk discount
+    if (floodDataDemo && floodDataDemo.riskLevel === 'High') {
+      valuation = Math.round(valuation * 0.94 / 1000) * 1000;
+      adjustments.push('-6% flood risk (High zone)');
+    } else if (floodDataDemo && floodDataDemo.riskLevel === 'Medium') {
+      valuation = Math.round(valuation * 0.97 / 1000) * 1000;
+      adjustments.push('-3% flood risk (Medium zone)');
+    }
+
+    // HPI market trend adjustment
+    if (hpiDataDemo && hpiDataDemo.annualChange !== undefined) {
+      if (hpiDataDemo.annualChange < -3) {
+        valuation = Math.round(valuation * 0.97 / 1000) * 1000;
+        adjustments.push(`-3% declining market (${hpiDataDemo.annualChange.toFixed(1)}% annual)`);
+      } else if (hpiDataDemo.annualChange < -1) {
+        valuation = Math.round(valuation * 0.98 / 1000) * 1000;
+        adjustments.push(`-2% softening market (${hpiDataDemo.annualChange.toFixed(1)}% annual)`);
+      } else if (hpiDataDemo.annualChange > 5) {
+        valuation = Math.round(valuation * 1.02 / 1000) * 1000;
+        adjustments.push(`+2% strong growth (${hpiDataDemo.annualChange.toFixed(1)}% annual)`);
+      }
+    }
+
+    // Deprivation adjustment — high deprivation areas trade at a discount
+    if (imdDataDemo && imdDataDemo.imdDecile <= 2) {
+      valuation = Math.round(valuation * 0.96 / 1000) * 1000;
+      adjustments.push(`-4% high deprivation area (IMD decile ${imdDataDemo.imdDecile})`);
+    } else if (imdDataDemo && imdDataDemo.imdDecile >= 9) {
+      valuation = Math.round(valuation * 1.02 / 1000) * 1000;
+      adjustments.push(`+2% low deprivation area (IMD decile ${imdDataDemo.imdDecile})`);
+    }
+
+    // Poor EPC area discount
+    if (areaDataDemo.epcSummary && areaDataDemo.epcSummary.averageRating && ['F', 'G'].includes(areaDataDemo.epcSummary.averageRating)) {
+      valuation = Math.round(valuation * 0.97 / 1000) * 1000;
+      adjustments.push(`-3% poor area EPC rating (${areaDataDemo.epcSummary.averageRating})`);
+    }
+
     const avgPsm = Math.round(valuation / sqm);
-    basisText = `Based on ${comparablesUsed} Land Registry sales in ${property.postcode}. Average sold price: £${Math.round(avgPrice).toLocaleString()}. Estimated £${avgPsm}/sqm for ${sqm}sqm.`;
+    basisText = `Based on ${comparablesUsed} Land Registry sales in ${property.postcode}. Average sold price: £${Math.round(avgPrice).toLocaleString()}. Estimated £${avgPsm}/sqm for ${sqm}sqm.${adjustments.length > 0 ? ` Adjustments: ${adjustments.join(', ')}.` : ''}`;
   } else {
     // Fallback: estimate from postcode heuristic
     const postcodePrefix = (property.postcode || '').split(/\d/)[0].toUpperCase();
@@ -1897,8 +1938,15 @@ app.post('/api/demo', rateLimit, async (req, res) => {
       basePsm *= 0.85;
     }
 
+    // Area data adjustments (fallback path)
+    const adjustments: string[] = [];
+    if (floodDataDemo && floodDataDemo.riskLevel === 'High') { basePsm *= 0.94; adjustments.push('flood risk'); }
+    else if (floodDataDemo && floodDataDemo.riskLevel === 'Medium') { basePsm *= 0.97; adjustments.push('flood risk'); }
+    if (hpiDataDemo && hpiDataDemo.annualChange !== undefined && hpiDataDemo.annualChange < -1) { basePsm *= 0.98; adjustments.push('declining market'); }
+    if (imdDataDemo && imdDataDemo.imdDecile <= 2) { basePsm *= 0.96; adjustments.push('high deprivation'); }
+
     valuation = Math.round(basePsm * sqm / 1000) * 1000;
-    basisText = `Estimated at £${Math.round(basePsm).toLocaleString()}/sqm for ${property.propertyType || 'flat'}s in ${property.postcode || 'this area'}. Limited Land Registry data for this postcode — valuation based on area price benchmarks.`;
+    basisText = `Estimated at £${Math.round(basePsm).toLocaleString()}/sqm for ${property.propertyType || 'flat'}s in ${property.postcode || 'this area'}. Limited Land Registry data for this postcode — valuation based on area price benchmarks.${adjustments.length > 0 ? ` Adjusted for: ${adjustments.join(', ')}.` : ''}`;
   }
 
   const savings = price - valuation;
@@ -1986,6 +2034,30 @@ app.post('/api/demo', rateLimit, async (req, res) => {
       impact: Math.round(propPrice * 0.08),
     });
   }
+  // Major nearby developments (planning data)
+  if (planningDataDemo && planningDataDemo.largeDevelopments >= 2) {
+    redFlags.push({
+      title: `${planningDataDemo.largeDevelopments} Major Developments Nearby`,
+      description: `${planningDataDemo.largeDevelopments} large/major planning applications found near ${property.postcode}. Major construction can cause years of noise/disruption and oversupply risk (new units competing with yours at resale). Check proximity and timelines carefully.`,
+      impact: Math.round(propPrice * 0.04),
+    });
+  }
+  // High deprivation area
+  if (imdDataDemo && imdDataDemo.imdDecile <= 2) {
+    redFlags.push({
+      title: `High Deprivation Area (IMD Decile ${imdDataDemo.imdDecile})`,
+      description: `This area is in the ${imdDataDemo.imdDecile === 1 ? 'most' : 'second most'} deprived 10% of neighbourhoods in England. High deprivation correlates with lower capital growth, higher crime, and narrower buyer pools at resale. Factor this into your long-term investment outlook.`,
+      impact: Math.round(propPrice * 0.05),
+    });
+  }
+  // Unaffordable area — high price-to-earnings ratio
+  if (hpiDataDemo?.affordabilityRatio && hpiDataDemo.affordabilityRatio > 10) {
+    redFlags.push({
+      title: `Stretched Affordability (${hpiDataDemo.affordabilityRatio}x Earnings)`,
+      description: `Prices here are ${hpiDataDemo.affordabilityRatio}x local median earnings (£${(hpiDataDemo.medianEarnings || 0).toLocaleString()}/yr) — well above the national average of ~8x. Stretched affordability limits the buyer pool, increases mortgage stress risk, and makes the area vulnerable to price corrections.`,
+      impact: Math.round(propPrice * 0.03),
+    });
+  }
   // Ensure at least 2 red flags
   if (redFlags.length < 2) {
     if (!redFlags.some(f => f.title.includes('Service Charge')) && property.serviceCharge && property.serviceCharge > 0) {
@@ -2049,6 +2121,30 @@ app.post('/api/demo', rateLimit, async (req, res) => {
       title: 'Declining Local House Prices',
       description: `House prices in this area have fallen ${Math.abs(hpiDataDemo.annualChange).toFixed(1)}% over the past year. A declining market means the property could be worth less by completion. Factor in the trend when setting your offer.`,
       impact: Math.round(propPrice * Math.abs(hpiDataDemo.annualChange) / 100),
+    });
+  }
+  // Nearby planning activity
+  if (planningDataDemo && planningDataDemo.total >= 10 && planningDataDemo.largeDevelopments < 2) {
+    warnings.push({
+      title: `${planningDataDemo.total} Planning Applications Nearby`,
+      description: `${planningDataDemo.total} planning applications found near ${property.postcode}, including ${planningDataDemo.largeDevelopments} major development${planningDataDemo.largeDevelopments !== 1 ? 's' : ''}. While none are individually large, cumulative construction activity can affect noise levels and parking.`,
+      impact: Math.round(propPrice * 0.01),
+    });
+  }
+  // High energy costs in area
+  if (areaDataDemo.epcSummary?.averageEnergyCost && areaDataDemo.epcSummary.averageEnergyCost > 2000) {
+    warnings.push({
+      title: `High Area Energy Costs (£${areaDataDemo.epcSummary.averageEnergyCost.toLocaleString()}/yr avg)`,
+      description: `Properties in ${property.postcode} have average annual energy costs of £${areaDataDemo.epcSummary.averageEnergyCost.toLocaleString()}. This is above the UK average of ~£1,500/yr and suggests poorly insulated housing stock. Budget accordingly and check the specific EPC for this property.`,
+      impact: Math.round((areaDataDemo.epcSummary.averageEnergyCost - 1500) * 10),
+    });
+  }
+  // Mid-range deprivation
+  if (imdDataDemo && imdDataDemo.imdDecile >= 3 && imdDataDemo.imdDecile <= 4) {
+    warnings.push({
+      title: `Below-Average Area (IMD Decile ${imdDataDemo.imdDecile})`,
+      description: `This neighbourhood falls in the ${imdDataDemo.imdDecile === 3 ? 'third' : 'fourth'} most deprived decile nationally. While not severely deprived, it may face challenges with local services, employment, and infrastructure that could limit capital growth.`,
+      impact: Math.round(propPrice * 0.02),
     });
   }
   if (property.tenure === 'leasehold') {
@@ -2158,6 +2254,38 @@ app.post('/api/demo', rateLimit, async (req, res) => {
       title: 'Affordable Relative to Local Earnings',
       description: `The price-to-earnings ratio here is ${hpiDataDemo.affordabilityRatio}x — below the national average of ~8x. More affordable areas tend to have broader buyer pools, supporting demand and resale liquidity.`,
       impact: Math.round(propPrice * 0.02),
+    });
+  }
+  // Good EPC rating area
+  if (areaDataDemo.epcSummary && areaDataDemo.epcSummary.averageRating && ['A', 'B'].includes(areaDataDemo.epcSummary.averageRating)) {
+    positives.push({
+      title: `Excellent Area Energy Efficiency (EPC ${areaDataDemo.epcSummary.averageRating})`,
+      description: `Properties in ${property.postcode} average an EPC rating of ${areaDataDemo.epcSummary.averageRating} — well above the national average of D. Better energy efficiency means lower running costs${areaDataDemo.epcSummary.averageEnergyCost ? ` (avg £${areaDataDemo.epcSummary.averageEnergyCost.toLocaleString()}/yr)` : ''} and growing buyer preference for green homes.`,
+      impact: Math.round(propPrice * 0.02),
+    });
+  }
+  // Low crime area
+  if (crimeDataDemo && crimeDataDemo.total < 40) {
+    positives.push({
+      title: 'Low Crime Area',
+      description: `Only ${crimeDataDemo.total} crimes reported nearby in the most recent period — below the national average. Low crime supports property values, reduces insurance costs, and increases buyer appeal.`,
+      impact: Math.round(propPrice * 0.02),
+    });
+  }
+  // Low deprivation area
+  if (imdDataDemo && imdDataDemo.imdDecile >= 8) {
+    positives.push({
+      title: `Low Deprivation Area (IMD Decile ${imdDataDemo.imdDecile})`,
+      description: `This neighbourhood ranks in the ${imdDataDemo.imdDecile === 10 ? 'least' : 'second least'} deprived 10% nationally — indicating good schools, employment, income levels, and local services. Low deprivation strongly correlates with sustained property demand.`,
+      impact: Math.round(propPrice * 0.03),
+    });
+  }
+  // Regeneration — positive planning (only if not already flagged as red flag for ≥2 major devs)
+  if (planningDataDemo && planningDataDemo.largeDevelopments === 1) {
+    positives.push({
+      title: 'Active Regeneration Nearby',
+      description: `A major development is underway near ${property.postcode}. Regeneration investment typically improves transport, amenities, and property values in the medium term — short-term disruption is normal.`,
+      impact: Math.round(propPrice * 0.03),
     });
   }
   if (comparablesUsed >= 5 && sameTypeComps.length >= 3) {
