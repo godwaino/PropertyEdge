@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react';
-import { AnalysisResult, AnalysisItem, PropertyInput, ComparableSale, AreaData, FloodRiskData } from '../types/property';
+import { AnalysisResult, AnalysisItem, PropertyInput, ComparableSale, AreaData, FloodRiskData, HousePriceIndexData, PlanningData } from '../types/property';
 
 interface Props {
   result: AnalysisResult;
@@ -513,8 +513,8 @@ export default function AnalysisResults({ result, property }: Props) {
         </div>
       )}
 
-      {/* Area data (EPC + Crime + Flood) */}
-      {result.area_data && (result.area_data.epcSummary || result.area_data.crimeRate || result.area_data.floodRisk) && (
+      {/* Area data (EPC + Crime + Flood + HPI + Planning) */}
+      {result.area_data && (result.area_data.epcSummary || result.area_data.crimeRate || result.area_data.floodRisk || result.area_data.housePriceIndex || result.area_data.planning) && (
         <div className="bg-navy-card border border-gray-800 rounded-2xl p-5">
           <h3 className="text-white font-semibold text-sm mb-3">Area Intelligence</h3>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -600,6 +600,83 @@ export default function AnalysisResults({ result, property }: Props) {
                   </div>
                 </div>
                 <p className="text-gray-500 text-[10px] mt-2 leading-relaxed">{result.area_data.floodRisk.description}</p>
+              </div>
+            )}
+            {result.area_data.housePriceIndex && (
+              <div className="bg-navy-light/50 rounded-xl p-3">
+                <div className="flex items-center gap-2 mb-2">
+                  <span className={`w-2 h-2 rounded-full flex-shrink-0 ${
+                    result.area_data.housePriceIndex.annualChange > 2 ? 'bg-cyan' :
+                    result.area_data.housePriceIndex.annualChange >= 0 ? 'bg-gold' : 'bg-pe-red'
+                  }`} />
+                  <p className="text-gray-400 text-[10px] uppercase tracking-wider font-medium">UK House Price Index</p>
+                  <span className="text-gray-600 text-[9px] ml-auto">{result.area_data.housePriceIndex.period}</span>
+                </div>
+                <div className="grid grid-cols-3 gap-2 text-center">
+                  <div>
+                    <p className="text-white text-sm font-bold">£{result.area_data.housePriceIndex.averagePrice.toLocaleString()}</p>
+                    <p className="text-gray-500 text-[10px]">Avg price ({result.area_data.housePriceIndex.region})</p>
+                  </div>
+                  <div>
+                    <p className={`text-sm font-bold ${
+                      result.area_data.housePriceIndex.annualChange > 0 ? 'text-cyan' :
+                      result.area_data.housePriceIndex.annualChange === 0 ? 'text-gold' : 'text-pe-red'
+                    }`}>{result.area_data.housePriceIndex.annualChange > 0 ? '+' : ''}{result.area_data.housePriceIndex.annualChange}%</p>
+                    <p className="text-gray-500 text-[10px]">Annual change</p>
+                  </div>
+                  <div>
+                    <p className={`text-sm font-bold ${
+                      result.area_data.housePriceIndex.monthlyChange > 0 ? 'text-cyan' :
+                      result.area_data.housePriceIndex.monthlyChange === 0 ? 'text-gold' : 'text-pe-red'
+                    }`}>{result.area_data.housePriceIndex.monthlyChange > 0 ? '+' : ''}{result.area_data.housePriceIndex.monthlyChange}%</p>
+                    <p className="text-gray-500 text-[10px]">Monthly change</p>
+                  </div>
+                </div>
+                {result.area_data.housePriceIndex.salesVolume && (
+                  <p className="text-gray-500 text-[10px] mt-2 text-center">{result.area_data.housePriceIndex.salesVolume.toLocaleString()} transactions recorded</p>
+                )}
+              </div>
+            )}
+            {result.area_data.planning && (
+              <div className="bg-navy-light/50 rounded-xl p-3">
+                <div className="flex items-center gap-2 mb-2">
+                  <span className={`w-2 h-2 rounded-full flex-shrink-0 ${
+                    result.area_data.planning.largeDevelopments > 2 ? 'bg-gold' : 'bg-cyan'
+                  }`} />
+                  <p className="text-gray-400 text-[10px] uppercase tracking-wider font-medium">Planning Applications</p>
+                </div>
+                <div className="grid grid-cols-3 gap-2 text-center mb-2">
+                  <div>
+                    <p className="text-white text-sm font-bold">{result.area_data.planning.total}</p>
+                    <p className="text-gray-500 text-[10px]">Total apps</p>
+                  </div>
+                  <div>
+                    <p className={`text-sm font-bold ${
+                      result.area_data.planning.largeDevelopments > 0 ? 'text-gold' : 'text-white'
+                    }`}>{result.area_data.planning.largeDevelopments}</p>
+                    <p className="text-gray-500 text-[10px]">Large/major</p>
+                  </div>
+                  <div>
+                    <p className="text-white text-sm font-bold">{result.area_data.planning.recent.length}</p>
+                    <p className="text-gray-500 text-[10px]">Recent</p>
+                  </div>
+                </div>
+                {result.area_data.planning.recent.length > 0 && (
+                  <div className="space-y-1 mt-2 border-t border-gray-800 pt-2">
+                    {result.area_data.planning.recent.slice(0, 3).map((app, i) => (
+                      <div key={i} className="flex items-start gap-1.5">
+                        <span className={`mt-1 w-1.5 h-1.5 rounded-full flex-shrink-0 ${
+                          app.status.toLowerCase().includes('approved') || app.status.toLowerCase().includes('permitted') ? 'bg-cyan' :
+                          app.status.toLowerCase().includes('refused') || app.status.toLowerCase().includes('rejected') ? 'bg-pe-red' : 'bg-gold'
+                        }`} />
+                        <p className="text-gray-400 text-[10px] leading-relaxed truncate" title={app.description}>
+                          {app.description}
+                          <span className="text-gray-600 ml-1">({app.status})</span>
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             )}
           </div>

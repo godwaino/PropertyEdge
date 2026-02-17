@@ -152,10 +152,36 @@ interface FloodRiskData {
   description: string;
 }
 
+interface HousePriceIndexData {
+  averagePrice: number;
+  annualChange: number;        // percentage
+  monthlyChange: number;       // percentage
+  salesVolume?: number;
+  region: string;
+  period: string;              // e.g. "2024-09"
+}
+
+interface PlanningApplication {
+  reference: string;
+  address: string;
+  description: string;
+  status: string;
+  decisionDate?: string;
+  url?: string;
+}
+
+interface PlanningData {
+  total: number;
+  recent: PlanningApplication[];  // top 5 most recent
+  largeDevelopments: number;       // count of major/large apps
+}
+
 interface AreaData {
   epcSummary?: { averageRating: string; averageFloorArea: number; totalCerts: number };
   crimeRate?: { total: number; topCategory: string; level: string };
   floodRisk?: FloodRiskData;
+  housePriceIndex?: HousePriceIndexData;
+  planning?: PlanningData;
 }
 
 // Haversine distance in miles between two lat/lng points
@@ -356,6 +382,112 @@ async function fetchFloodRisk(lat: number, lng: number): Promise<FloodRiskData |
     return { riskLevel, activeWarnings, nearestStation, description };
   } catch (err: any) {
     console.error('Flood Risk API failed:', err?.message);
+  }
+  return undefined;
+}
+
+// Fetch UK House Price Index data from HM Land Registry Linked Data API
+async function fetchHousePriceIndex(postcode: string): Promise<HousePriceIndexData | undefined> {
+  try {
+    // First resolve postcode → local authority via postcodes.io
+    const encoded = encodeURIComponent(postcode.trim());
+    const pcRes = await fetch(`https://api.postcodes.io/postcodes/${encoded}`, { signal: AbortSignal.timeout(3000) });
+    const pcData = await pcRes.json() as any;
+    if (pcData.status !== 200 || !pcData.result) return undefined;
+
+    const region = pcData.result.admin_district || pcData.result.region || '';
+    if (!region) return undefined;
+
+    // Convert region name to URI slug (e.g. "City of Manchester" → "city-of-manchester")
+    const regionSlug = region.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+
+    // Query the UK HPI REST API — try local authority first, then region
+    for (const path of [
+      `local-authority/${regionSlug}`,
+      `region/${regionSlug}`,
+      `county/${regionSlug}`,
+    ]) {
+      try {
+        const hpiRes = await fetch(
+          `https://landregistry.data.gov.uk/data/ukhpi/${path}?_sort=-refMonth&_pageSize=1`,
+          {
+            headers: { Accept: 'application/json' },
+            signal: AbortSignal.timeout(5000),
+          }
+        );
+        if (!hpiRes.ok) continue;
+
+        const hpiData = await hpiRes.json() as any;
+        const items = hpiData?.result?.items;
+        if (!items || items.length === 0) continue;
+
+        const latest = items[0];
+        const avgPrice = latest['averagePrice'] || latest['http://landregistry.data.gov.uk/def/ukhpi/averagePrice'];
+        const annualChange = latest['percentageAnnualChange'] || latest['http://landregistry.data.gov.uk/def/ukhpi/percentageAnnualChange'];
+        const monthlyChange = latest['percentageChange'] || latest['http://landregistry.data.gov.uk/def/ukhpi/percentageChange'];
+        const salesVolume = latest['salesVolume'] || latest['http://landregistry.data.gov.uk/def/ukhpi/salesVolume'];
+        const refMonth = latest['refMonth'] || latest['http://landregistry.data.gov.uk/def/ukhpi/refMonth'] || '';
+
+        if (avgPrice) {
+          return {
+            averagePrice: Math.round(typeof avgPrice === 'number' ? avgPrice : parseFloat(avgPrice)),
+            annualChange: typeof annualChange === 'number' ? Math.round(annualChange * 10) / 10 : parseFloat(annualChange) || 0,
+            monthlyChange: typeof monthlyChange === 'number' ? Math.round(monthlyChange * 10) / 10 : parseFloat(monthlyChange) || 0,
+            salesVolume: salesVolume ? Math.round(typeof salesVolume === 'number' ? salesVolume : parseFloat(salesVolume)) : undefined,
+            region,
+            period: typeof refMonth === 'string' ? refMonth.substring(0, 7) : String(refMonth).substring(0, 7),
+          };
+        }
+      } catch {
+        continue;
+      }
+    }
+  } catch (err: any) {
+    console.error('UK HPI API failed:', err?.message);
+  }
+  return undefined;
+}
+
+// Fetch nearby planning applications from PlanIt.org.uk
+async function fetchPlanningApplications(postcode: string): Promise<PlanningData | undefined> {
+  try {
+    const encoded = encodeURIComponent(postcode.trim());
+    const res = await fetch(
+      `https://www.planit.org.uk/api/applics/json?pcode=${encoded}&limit=20&pg_sz=20&sort=-start_date`,
+      {
+        headers: { Accept: 'application/json' },
+        signal: AbortSignal.timeout(6000),
+      }
+    );
+    if (!res.ok) return undefined;
+
+    const data = await res.json() as any;
+    const records = data?.records || [];
+    if (records.length === 0) return undefined;
+
+    // Extract and classify applications
+    const apps: PlanningApplication[] = records.map((r: any) => ({
+      reference: r.uid || r.altid || '',
+      address: r.address || '',
+      description: (r.description || '').substring(0, 200),
+      status: r.status || 'Unknown',
+      decisionDate: r.decision_date || r.start_date || '',
+      url: r.url || '',
+    }));
+
+    // Count large/major developments
+    const largeKeywords = /\b(major|large|demolition|erection of \d{2,}|construction of \d{2,}|\d{2,}\s*(?:dwellings|units|flats|houses|apartments|residential))\b/i;
+    const largeDevelopments = records.filter((r: any) =>
+      largeKeywords.test(r.description || '') || r.app_size === 'Large' || r.app_size === 'Major'
+    ).length;
+
+    return {
+      total: data.total || records.length,
+      recent: apps.slice(0, 5),
+      largeDevelopments,
+    };
+  } catch (err: any) {
+    console.error('PlanIt API failed:', err?.message);
   }
   return undefined;
 }
@@ -913,19 +1045,28 @@ app.post('/api/analyze', rateLimit, async (req, res) => {
       }));
     }
 
-    // Fetch crime and flood data in parallel (non-blocking)
+    // Fetch crime, flood, HPI, and planning data in parallel (non-blocking)
     let crimeData: AreaData['crimeRate'] | undefined;
     let floodData: FloodRiskData | undefined;
+    let hpiData: HousePriceIndexData | undefined;
+    let planningData: PlanningData | undefined;
+
+    const parallelFetches: Promise<any>[] = [
+      fetchHousePriceIndex(property.postcode).then(r => { hpiData = r; }),
+      fetchPlanningApplications(property.postcode).then(r => { planningData = r; }),
+    ];
     if (subjectLocation) {
-      const [crimeResult, floodResult] = await Promise.all([
-        fetchCrimeData(subjectLocation.lat, subjectLocation.lng),
-        fetchFloodRisk(subjectLocation.lat, subjectLocation.lng),
-      ]);
-      crimeData = crimeResult;
-      floodData = floodResult;
-      if (crimeData) dataSources.push('Police UK');
-      if (floodData) dataSources.push('Environment Agency');
+      parallelFetches.push(
+        fetchCrimeData(subjectLocation.lat, subjectLocation.lng).then(r => { crimeData = r; }),
+        fetchFloodRisk(subjectLocation.lat, subjectLocation.lng).then(r => { floodData = r; }),
+      );
     }
+    await Promise.all(parallelFetches);
+
+    if (crimeData) dataSources.push('Police UK');
+    if (floodData) dataSources.push('Environment Agency');
+    if (hpiData) dataSources.push('UK House Price Index');
+    if (planningData) dataSources.push('PlanIt Planning Data');
 
     // Enrich: similarity scores
     const includedForScoring = comparables.filter(c => !c.excluded);
@@ -942,6 +1083,8 @@ app.post('/api/analyze', rateLimit, async (req, res) => {
       epcSummary: summariseEpc(epcData),
       crimeRate: crimeData,
       floodRisk: floodData,
+      housePriceIndex: hpiData,
+      planning: planningData,
     };
 
     dataSources.push('AI Analysis');
@@ -982,7 +1125,17 @@ Property Details:
 - Year Built: ${property.yearBuilt}
 - Tenure: ${property.tenure}${leaseholdInfo}
 ${comparablesText}
-${areaData.epcSummary ? `\nAREA EPC DATA (Energy Performance Certificates):\n- Average energy rating: ${areaData.epcSummary.averageRating}\n- Average floor area: ${areaData.epcSummary.averageFloorArea}sqm\n- ${areaData.epcSummary.totalCerts} certificates in this postcode\n` : ''}${areaData.crimeRate ? `\nAREA CRIME DATA (Police UK):\n- ${areaData.crimeRate.total} crimes reported nearby (last month)\n- Most common: ${areaData.crimeRate.topCategory}\n- Crime level: ${areaData.crimeRate.level}\n` : ''}${areaData.floodRisk ? `\nFLOOD RISK DATA (Environment Agency):\n- Flood risk level: ${areaData.floodRisk.riskLevel}\n- Active warnings within 5km: ${areaData.floodRisk.activeWarnings}\n- ${areaData.floodRisk.description}${areaData.floodRisk.nearestStation ? `\n- Nearest monitoring station: ${areaData.floodRisk.nearestStation}` : ''}\nNote: If flood risk is Medium or High, this MUST appear in red_flags or warnings with estimated insurance/remediation cost impact.\n` : ''}
+${areaData.epcSummary ? `\nAREA EPC DATA (Energy Performance Certificates):\n- Average energy rating: ${areaData.epcSummary.averageRating}\n- Average floor area: ${areaData.epcSummary.averageFloorArea}sqm\n- ${areaData.epcSummary.totalCerts} certificates in this postcode\n` : ''}${areaData.crimeRate ? `\nAREA CRIME DATA (Police UK):\n- ${areaData.crimeRate.total} crimes reported nearby (last month)\n- Most common: ${areaData.crimeRate.topCategory}\n- Crime level: ${areaData.crimeRate.level}\n` : ''}${areaData.floodRisk ? `\nFLOOD RISK DATA (Environment Agency):\n- Flood risk level: ${areaData.floodRisk.riskLevel}\n- Active warnings within 5km: ${areaData.floodRisk.activeWarnings}\n- ${areaData.floodRisk.description}${areaData.floodRisk.nearestStation ? `\n- Nearest monitoring station: ${areaData.floodRisk.nearestStation}` : ''}\nNote: If flood risk is Medium or High, this MUST appear in red_flags or warnings with estimated insurance/remediation cost impact.\n` : ''}${areaData.housePriceIndex ? `\nUK HOUSE PRICE INDEX (HM Land Registry):
+- Region: ${areaData.housePriceIndex.region}
+- Average price: £${areaData.housePriceIndex.averagePrice.toLocaleString()} (${areaData.housePriceIndex.period})
+- Annual change: ${areaData.housePriceIndex.annualChange > 0 ? '+' : ''}${areaData.housePriceIndex.annualChange}%
+- Monthly change: ${areaData.housePriceIndex.monthlyChange > 0 ? '+' : ''}${areaData.housePriceIndex.monthlyChange}%${areaData.housePriceIndex.salesVolume ? `\n- Sales volume: ${areaData.housePriceIndex.salesVolume} transactions` : ''}
+Use this to contextualise whether the local market is rising, flat or falling. Factor market trends into your valuation confidence.\n` : ''}${areaData.planning ? `\nPLANNING APPLICATIONS (PlanIt):
+- ${areaData.planning.total} planning applications near this postcode
+- ${areaData.planning.largeDevelopments} large/major developments
+- Recent applications:
+${areaData.planning.recent.map(a => `  - ${a.description} (${a.status})`).join('\n')}
+Note: Major nearby developments can affect property value positively (regeneration) or negatively (construction disruption, oversupply). Factor this into warnings or positives.\n` : ''}
 VALUATION METHODOLOGY:
 1. ${comparables.length > 0
       ? 'USE THE REAL COMPARABLE SALES DATA ABOVE as your primary evidence. Identify the most similar properties and derive your valuation from their sold prices.'
@@ -1188,24 +1341,35 @@ app.post('/api/demo', rateLimit, async (req, res) => {
     distance: Math.round((0.1 + (i * 0.15) % 1.5) * 10) / 10,
   }));
 
-  // Crime + Flood data
+  // Crime, Flood, HPI, and Planning data in parallel
   let crimeDataDemo: AreaData['crimeRate'] | undefined;
   let floodDataDemo: FloodRiskData | undefined;
+  let hpiDataDemo: HousePriceIndexData | undefined;
+  let planningDataDemo: PlanningData | undefined;
+
+  const demoParallelFetches: Promise<any>[] = [
+    fetchHousePriceIndex(property.postcode || '').then(r => { hpiDataDemo = r; }),
+    fetchPlanningApplications(property.postcode || '').then(r => { planningDataDemo = r; }),
+  ];
   if (locationDemo) {
-    const [crimeResult, floodResult] = await Promise.all([
-      fetchCrimeData(locationDemo.lat, locationDemo.lng),
-      fetchFloodRisk(locationDemo.lat, locationDemo.lng),
-    ]);
-    crimeDataDemo = crimeResult;
-    floodDataDemo = floodResult;
-    if (crimeDataDemo) dataSources.push('Police UK');
-    if (floodDataDemo) dataSources.push('Environment Agency');
+    demoParallelFetches.push(
+      fetchCrimeData(locationDemo.lat, locationDemo.lng).then(r => { crimeDataDemo = r; }),
+      fetchFloodRisk(locationDemo.lat, locationDemo.lng).then(r => { floodDataDemo = r; }),
+    );
   }
+  await Promise.all(demoParallelFetches);
+
+  if (crimeDataDemo) dataSources.push('Police UK');
+  if (floodDataDemo) dataSources.push('Environment Agency');
+  if (hpiDataDemo) dataSources.push('UK House Price Index');
+  if (planningDataDemo) dataSources.push('PlanIt Planning Data');
 
   const areaDataDemo: AreaData = {
     epcSummary: summariseEpc(epcDataDemo),
     crimeRate: crimeDataDemo,
     floodRisk: floodDataDemo,
+    housePriceIndex: hpiDataDemo,
+    planning: planningDataDemo,
   };
 
   let valuation: number;

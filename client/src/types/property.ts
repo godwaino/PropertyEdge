@@ -47,10 +47,36 @@ export interface FloodRiskData {
   description: string;
 }
 
+export interface HousePriceIndexData {
+  averagePrice: number;
+  annualChange: number;
+  monthlyChange: number;
+  salesVolume?: number;
+  region: string;
+  period: string;
+}
+
+export interface PlanningApplication {
+  reference: string;
+  address: string;
+  description: string;
+  status: string;
+  decisionDate?: string;
+  url?: string;
+}
+
+export interface PlanningData {
+  total: number;
+  recent: PlanningApplication[];
+  largeDevelopments: number;
+}
+
 export interface AreaData {
   epcSummary?: { averageRating: string; averageFloorArea: number; totalCerts: number };
   crimeRate?: { total: number; topCategory: string; level: string };
   floodRisk?: FloodRiskData;
+  housePriceIndex?: HousePriceIndexData;
+  planning?: PlanningData;
 }
 
 export interface AnalysisResult {

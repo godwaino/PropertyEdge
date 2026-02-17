@@ -2,7 +2,8 @@ import { useState, useEffect } from 'react';
 
 const steps = [
   'Fetching sold prices and comparables',
-  'Checking EPC, crime and flood risk data',
+  'Checking EPC, crime, flood and planning data',
+  'Analysing house price trends',
   'Running AI valuation analysis',
   'Building negotiation playbook',
 ];

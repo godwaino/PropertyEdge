@@ -137,10 +137,11 @@ export default function Hero({ onAnalyseClick, onExtractListing, visible, isExtr
         <p className="text-gray-600 text-[10px] uppercase tracking-wider mb-2">Data sources</p>
         <div className="flex flex-wrap justify-center gap-3">
           {[
-            { name: 'HM Land Registry', desc: 'Sold prices' },
+            { name: 'HM Land Registry', desc: 'Sold prices & HPI' },
             { name: 'EPC Register', desc: 'Energy & floor area' },
             { name: 'Police UK', desc: 'Crime data' },
             { name: 'Environment Agency', desc: 'Flood risk' },
+            { name: 'PlanIt', desc: 'Planning apps' },
             { name: 'postcodes.io', desc: 'Geolocation' },
             { name: 'AI Analysis', desc: 'Valuation model' },
           ].map((s) => (
