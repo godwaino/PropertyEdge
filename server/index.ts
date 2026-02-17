@@ -245,6 +245,57 @@ async function getPostcodeLocation(postcode: string): Promise<{ lat: number; lng
   return null;
 }
 
+// Bulk-lookup lat/lng for up to 100 postcodes via postcodes.io POST /postcodes
+async function bulkPostcodeLookup(postcodes: string[]): Promise<Map<string, { lat: number; lng: number }>> {
+  const result = new Map<string, { lat: number; lng: number }>();
+  if (postcodes.length === 0) return result;
+
+  // postcodes.io allows max 100 per request
+  const unique = [...new Set(postcodes.map(p => p.trim().toUpperCase()))].slice(0, 100);
+  try {
+    const res = await fetch('https://api.postcodes.io/postcodes', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ postcodes: unique }),
+      signal: AbortSignal.timeout(5000),
+    });
+    const data = await res.json() as any;
+    if (data.status === 200 && Array.isArray(data.result)) {
+      for (const item of data.result) {
+        if (item.result && item.result.latitude && item.result.longitude) {
+          result.set(item.query.toUpperCase(), { lat: item.result.latitude, lng: item.result.longitude });
+        }
+      }
+    }
+  } catch (err: any) {
+    console.error('Bulk postcode lookup failed:', err?.message);
+  }
+  return result;
+}
+
+// Enrich comparables with real haversine distances from subject property
+async function enrichWithDistances(
+  comparables: ComparableSale[],
+  subjectLat: number,
+  subjectLng: number,
+): Promise<ComparableSale[]> {
+  const compPostcodes = comparables
+    .map(c => c.postcode)
+    .filter((p): p is string => !!p);
+  if (compPostcodes.length === 0) return comparables;
+
+  const locations = await bulkPostcodeLookup(compPostcodes);
+
+  return comparables.map(c => {
+    if (c.postcode && locations.has(c.postcode.toUpperCase())) {
+      const loc = locations.get(c.postcode.toUpperCase())!;
+      const dist = Math.round(haversineDistance(subjectLat, subjectLng, loc.lat, loc.lng) * 10) / 10;
+      return { ...c, distance: dist };
+    }
+    return c;
+  });
+}
+
 // Fetch EPC data for a postcode from the open EPC API (opendatacommunities.org)
 interface EpcEntry {
   rating: string;
@@ -909,7 +960,7 @@ async function fetchComparables(postcode: string): Promise<ComparableSale[]> {
         FILTER(?date >= "2020-01-01"^^xsd:date)
       }
       ORDER BY DESC(?date)
-      LIMIT 20
+      LIMIT 50
     `;
 
     try {
@@ -955,7 +1006,7 @@ function formatComparables(sales: ComparableSale[], propertyType: string): strin
   const relevantSales = sameType.length >= 3 ? sameType : included;
 
   const now = new Date();
-  const lines = relevantSales.slice(0, 15).map(s => {
+  const lines = relevantSales.slice(0, 25).map(s => {
     const saleDate = new Date(s.date);
     const monthsAgo = Math.round((now.getTime() - saleDate.getTime()) / (1000 * 60 * 60 * 24 * 30));
     const ukDate = saleDate.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
@@ -1347,13 +1398,12 @@ app.post('/api/analyze', rateLimit, async (req, res) => {
       });
     }
 
-    // Enrich: distance from subject property
+    // Enrich: real distances from subject property via postcode geocoding
     if (subjectLocation) {
       dataSources.push('postcodes.io');
-      comparables = comparables.map((c, i) => ({
-        ...c,
-        distance: Math.round((0.1 + (i * 0.15) % 1.5) * 10) / 10,
-      }));
+      comparables = await enrichWithDistances(comparables, subjectLocation.lat, subjectLocation.lng);
+      // Sort by distance so nearest comps appear first
+      comparables.sort((a, b) => (a.distance ?? 99) - (b.distance ?? 99));
     }
 
     // Fetch crime, flood, HPI, planning, earnings, and IMD data in parallel (non-blocking)
@@ -1545,7 +1595,7 @@ Where:
     const analysis = JSON.parse(jsonMatch[0]);
 
     // Attach enriched comparables for the frontend table
-    analysis.comparables = comparables.slice(0, 15).map((c: any) => ({
+    analysis.comparables = comparables.slice(0, 25).map((c: any) => ({
       price: c.price,
       date: c.date,
       address: c.address,
@@ -1772,12 +1822,13 @@ app.post('/api/demo', rateLimit, async (req, res) => {
     });
   }
 
-  // Enrich: distance approximation
-  if (locationDemo) dataSources.push('postcodes.io');
-  comparables = comparables.map((c, i) => ({
-    ...c,
-    distance: Math.round((0.1 + (i * 0.15) % 1.5) * 10) / 10,
-  }));
+  // Enrich: real distances from subject property via postcode geocoding
+  if (locationDemo) {
+    dataSources.push('postcodes.io');
+    comparables = await enrichWithDistances(comparables, locationDemo.lat, locationDemo.lng);
+    // Sort by distance so nearest comps appear first
+    comparables.sort((a, b) => (a.distance ?? 99) - (b.distance ?? 99));
+  }
 
   // Crime, Flood, HPI, Planning, Earnings, and IMD data in parallel
   let crimeDataDemo: AreaData['crimeRate'] | undefined;
@@ -2346,7 +2397,7 @@ app.post('/api/demo', rateLimit, async (req, res) => {
     savings,
     summary: summaryText,
     comparables_used: comparablesUsed,
-    comparables: comparables.slice(0, 15).map(c => ({
+    comparables: comparables.slice(0, 25).map(c => ({
       price: c.price,
       date: c.date,
       address: c.address,
