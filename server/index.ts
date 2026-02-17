@@ -134,6 +134,7 @@ interface ComparableSale {
   price: number;
   date: string;
   address: string;
+  postcode?: string;      // full postcode from Land Registry
   propertyType: string;
   newBuild: boolean;
   distance?: number;
@@ -891,7 +892,7 @@ async function fetchComparables(postcode: string): Promise<ComparableSale[]> {
       PREFIX lrcommon: <http://landregistry.data.gov.uk/def/common/>
       PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
 
-      SELECT ?price ?date ?paon ?street ?town ?ptype ?newBuild
+      SELECT ?price ?date ?paon ?street ?town ?postcode ?ptype ?newBuild
       WHERE {
         ${postcodeFilter}
         ?txn lrppi:pricePaid ?price ;
@@ -926,6 +927,7 @@ async function fetchComparables(postcode: string): Promise<ComparableSale[]> {
         price: parseInt(b.price?.value || '0'),
         date: b.date?.value?.substring(0, 10) || '',
         address: [b.paon?.value, b.street?.value, b.town?.value].filter(Boolean).join(', '),
+        postcode: b.postcode?.value?.trim().toUpperCase() || undefined,
         propertyType: (b.ptype?.value || 'unknown').toLowerCase(),
         newBuild: b.newBuild?.value === 'true',
       }));
@@ -1035,6 +1037,58 @@ async function resolveFullPostcode(partialPostcode: string, address: string): Pr
 
   // Could not resolve — return what we have
   return trimmed;
+}
+
+// Resolve postcode from Land Registry comparable sales data.
+// Returns the most common full postcode found in the comparables that matches the
+// outward code, or falls back to postcodes.io if no comparables are available.
+function resolvePostcodeFromComparables(
+  comparables: ComparableSale[],
+  inputPostcode: string,
+  address: string,
+): string | null {
+  if (comparables.length === 0) return null;
+
+  const outwardCode = inputPostcode.trim().split(/\s+/)[0].toUpperCase();
+
+  // Count occurrences of each full postcode from the Land Registry results
+  const counts = new Map<string, number>();
+  for (const c of comparables) {
+    if (c.postcode && /^[A-Z]{1,2}\d[A-Z\d]?\s*\d[A-Z]{2}$/i.test(c.postcode)) {
+      const pc = c.postcode.toUpperCase();
+      // Only consider postcodes that match the outward code the user entered
+      if (pc.startsWith(outwardCode)) {
+        counts.set(pc, (counts.get(pc) || 0) + 1);
+      }
+    }
+  }
+
+  if (counts.size === 0) return null;
+
+  // If the user provided a full address, try to find an exact address match first
+  if (address) {
+    const normAddr = address.toLowerCase().replace(/[^a-z0-9]/g, '');
+    for (const c of comparables) {
+      if (c.postcode && c.address) {
+        const normComp = c.address.toLowerCase().replace(/[^a-z0-9]/g, '');
+        if (normComp.includes(normAddr) || normAddr.includes(normComp)) {
+          return c.postcode.toUpperCase();
+        }
+      }
+    }
+  }
+
+  // Return the most common postcode in the comparables
+  let bestPostcode = '';
+  let bestCount = 0;
+  for (const [pc, count] of counts) {
+    if (count > bestCount) {
+      bestPostcode = pc;
+      bestCount = count;
+    }
+  }
+
+  return bestPostcode || null;
 }
 
 // Extract property details from pasted listing text using Claude
@@ -1173,8 +1227,20 @@ app.post('/api/analyze', rateLimit, async (req, res) => {
   try {
     const property: PropertyRequest = req.body;
 
-    // Resolve partial postcodes (e.g. "M3") to full ones before analysis
-    property.postcode = await resolveFullPostcode(property.postcode, property.address);
+    // Step 1: Fetch comparables first — Land Registry handles partial postcodes
+    // natively via STRSTARTS, giving us ground-truth postcode data
+    const comparablesRaw = await fetchComparables(property.postcode);
+
+    // Step 2: Resolve postcode from Land Registry data (most accurate source)
+    const resolvedFromLR = resolvePostcodeFromComparables(
+      comparablesRaw, property.postcode, property.address
+    );
+    if (resolvedFromLR) {
+      property.postcode = resolvedFromLR;
+    } else {
+      // No Land Registry data — fall back to postcodes.io
+      property.postcode = await resolveFullPostcode(property.postcode, property.address);
+    }
 
     const cacheKey = propertyHash(property);
 
@@ -1193,9 +1259,8 @@ app.post('/api/analyze', rateLimit, async (req, res) => {
       return;
     }
 
-    // Fetch data from multiple sources in parallel
-    const [comparablesRaw, epcData, subjectLocation] = await Promise.all([
-      fetchComparables(property.postcode),
+    // Step 3: Fetch EPC and location data using the accurate resolved postcode
+    const [epcData, subjectLocation] = await Promise.all([
       fetchEpcData(property.postcode),
       getPostcodeLocation(property.postcode),
     ]);
@@ -1537,14 +1602,26 @@ app.post('/api/demo', rateLimit, async (req, res) => {
     property.tenure = property.propertyType === 'flat' ? 'leasehold' : 'freehold';
   }
 
-  // Resolve partial postcodes before fetching comps
+  // Step 1: Fetch comparables first — Land Registry handles partial postcodes natively
+  // via STRSTARTS, so this works even with just an outward code like "M3"
+  const comparablesRaw = await fetchComparables(property.postcode || '');
+
+  // Step 2: Resolve the full postcode from Land Registry data (ground truth)
+  // rather than relying on postcodes.io guesswork
   if (property.postcode) {
-    property.postcode = await resolveFullPostcode(property.postcode, property.address || '');
+    const resolvedFromLR = resolvePostcodeFromComparables(
+      comparablesRaw, property.postcode, property.address || ''
+    );
+    if (resolvedFromLR) {
+      property.postcode = resolvedFromLR;
+    } else {
+      // No Land Registry data — fall back to postcodes.io
+      property.postcode = await resolveFullPostcode(property.postcode, property.address || '');
+    }
   }
 
-  // Fetch data from multiple sources in parallel
-  const [comparablesRaw, epcDataDemo, locationDemo] = await Promise.all([
-    fetchComparables(property.postcode || ''),
+  // Step 3: Now fetch EPC and location data using the accurate resolved postcode
+  const [epcDataDemo, locationDemo] = await Promise.all([
     fetchEpcData(property.postcode || ''),
     getPostcodeLocation(property.postcode || ''),
   ]);
