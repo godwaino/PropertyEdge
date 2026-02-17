@@ -348,8 +348,34 @@ export default function AnalysisResults({ result, property }: Props) {
     ? `Overall: ${verdictLabel(result.verdict)} at ${fmt(property.askingPrice)} — ${fmt(savingsAbs)} above our valuation of ${fmt(result.valuation.amount)}.`
     : `Overall: ${verdictLabel(result.verdict)} at ${fmt(property.askingPrice)} — close to our valuation of ${fmt(result.valuation.amount)}.`;
 
+  const typeLabel = property.propertyType
+    ? property.propertyType.replace('-', '-').replace(/\b\w/g, c => c.toUpperCase())
+    : '';
+
+  const detailChips = [
+    typeLabel,
+    property.bedrooms ? `${property.bedrooms} bed` : '',
+    property.sizeSqm ? `${property.sizeSqm} sqm` : '',
+    property.yearBuilt ? `Built ${property.yearBuilt}` : '',
+    property.tenure ? property.tenure.charAt(0).toUpperCase() + property.tenure.slice(1) : '',
+  ].filter(Boolean);
+
   return (
     <div className="w-full max-w-4xl mx-auto mt-8 animate-slide-up space-y-4">
+
+      {/* Property identification header */}
+      <div className="bg-th-card border border-th-border rounded-2xl px-6 py-4">
+        <p className="text-th-heading text-lg font-bold leading-snug">
+          {property.address}{property.postcode ? `, ${property.postcode}` : ''}
+        </p>
+        <div className="flex flex-wrap gap-2 mt-2">
+          {detailChips.map((chip, i) => (
+            <span key={i} className="text-[11px] px-2.5 py-0.5 rounded-full border border-th-border text-th-secondary bg-th-input">
+              {chip}
+            </span>
+          ))}
+        </div>
+      </div>
 
       {/* One-liner verdict */}
       <div id="section-verdict" className="bg-th-card border border-th-border rounded-2xl px-6 py-4">
