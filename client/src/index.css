@@ -14,10 +14,10 @@
   --c-input:    241 245 249;   /* slate-100 */
   --c-heading:  15  23  42;    /* slate-900 */
   --c-body:     51  65  85;    /* slate-600 */
-  --c-secondary:100 116 139;   /* slate-500 */
-  --c-muted:    148 163 184;   /* slate-400 */
-  --c-faint:    203 213 225;   /* slate-300 */
-  --c-border:   226 232 240;   /* slate-200 */
+  --c-secondary: 71  85 105;   /* slate-600→500 blend, WCAG AA on white */
+  --c-muted:    100 116 139;   /* slate-500 (was 400, too light) */
+  --c-faint:    148 163 184;   /* slate-400 (was 300, too light) */
+  --c-border:   203 213 225;   /* slate-300 (was 200, too faint) */
   --c-skeleton: 226 232 240;   /* slate-200 */
 }
 
@@ -56,4 +56,9 @@ body {
 
 .animate-slide-up {
   animation: slide-up 0.5s ease-out forwards;
+}
+
+/* Light-mode cards get a subtle shadow for depth */
+:root:not(.dark) .bg-th-card {
+  box-shadow: 0 1px 3px rgb(0 0 0 / 0.06), 0 1px 2px rgb(0 0 0 / 0.04);
 }

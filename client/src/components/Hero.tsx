@@ -1,11 +1,8 @@
 import { useState } from 'react';
-import { PropertyInput } from '../types/property';
-import { FEATURED } from './FeaturedProperties';
 
 interface Props {
   onAnalyseClick: () => void;
   onExtractListing: (text: string) => void;
-  onTryExample: (property: PropertyInput) => void;
   visible: boolean;
   isExtracting: boolean;
   selectedPersona: string | null;
@@ -41,10 +38,7 @@ const features = [
   },
 ];
 
-// Pick 3 diverse examples for the quick-try row
-const EXAMPLES = FEATURED.filter((_, i) => i === 0 || i === 1 || i === 2);
-
-export default function Hero({ onAnalyseClick, onExtractListing, onTryExample, visible, isExtracting, selectedPersona, onPersonaSelect }: Props) {
+export default function Hero({ onAnalyseClick, onExtractListing, visible, isExtracting, selectedPersona, onPersonaSelect }: Props) {
   const [pasteText, setPasteText] = useState('');
 
   if (!visible) return null;
@@ -101,20 +95,6 @@ export default function Hero({ onAnalyseClick, onExtractListing, onTryExample, v
         <p className="mt-2 text-th-faint text-xs">
           We&apos;ll auto-fill the details for you. Or <button onClick={onAnalyseClick} className="text-cyan/70 hover:text-cyan underline-offset-2 underline">fill in details manually</button>
         </p>
-
-        {/* Try an example */}
-        <div className="mt-3 flex flex-wrap items-center justify-center gap-2">
-          <span className="text-th-faint text-[11px]">Try an example:</span>
-          {EXAMPLES.map((ex, i) => (
-            <button
-              key={i}
-              onClick={() => onTryExample(ex.property)}
-              className="text-[11px] px-2.5 py-1 rounded-full border border-th-border text-th-secondary hover:text-cyan hover:border-cyan/50 bg-th-input/40 transition-colors"
-            >
-              {ex.label}
-            </button>
-          ))}
-        </div>
       </div>
 
       {/* Audience pills */}
@@ -152,36 +132,6 @@ export default function Hero({ onAnalyseClick, onExtractListing, onTryExample, v
         ))}
       </div>
 
-      {/* Data sources strip */}
-      <div className="mt-6 max-w-3xl mx-auto">
-        <p className="text-th-faint text-[10px] uppercase tracking-wider mb-2">Data sources</p>
-        <div className="flex flex-wrap justify-center gap-3">
-          {[
-            { name: 'HM Land Registry', desc: 'Sold prices & HPI' },
-            { name: 'EPC Register', desc: 'Energy & floor area' },
-            { name: 'Police UK', desc: 'Crime data' },
-            { name: 'Environment Agency', desc: 'Flood risk' },
-            { name: 'PlanIt', desc: 'Planning apps' },
-            { name: 'postcodes.io', desc: 'Geolocation' },
-            { name: 'AI Analysis', desc: 'Valuation model' },
-          ].map((s) => (
-            <div key={s.name} className="flex items-center gap-1.5 bg-th-card/40 border border-th-border rounded-lg px-2.5 py-1.5">
-              <div className="w-1.5 h-1.5 rounded-full bg-cyan/60 flex-shrink-0" />
-              <div className="text-left">
-                <p className="text-th-body text-[10px] font-medium leading-tight">{s.name}</p>
-                <p className="text-th-faint text-[9px] leading-tight">{s.desc}</p>
-              </div>
-            </div>
-          ))}
-        </div>
-      </div>
-
-      {/* Trust cues */}
-      <div className="mt-3 flex flex-wrap justify-center gap-4 text-[11px] text-th-muted">
-        <span>No account needed</span>
-        <span>&middot;</span>
-        <span>Searches not stored</span>
-      </div>
     </section>
   );
 }

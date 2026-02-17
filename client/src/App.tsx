@@ -145,7 +145,7 @@ export default function App() {
         </div>
       )}
 
-      <div className="relative z-10 pb-16">
+      <div className="relative z-10 pb-8">
         <Header onReset={handleReset} isDark={isDark} onToggleTheme={toggleTheme} />
 
         <div className="max-w-4xl mx-auto px-4 mb-2 flex justify-end items-center gap-2">
@@ -173,7 +173,6 @@ export default function App() {
         <Hero
           onAnalyseClick={handleAnalyseClick}
           onExtractListing={handleExtractListing}
-          onTryExample={handleTryExample}
           visible={showHero}
           isExtracting={isExtracting}
           selectedPersona={selectedPersona}
@@ -227,6 +226,35 @@ export default function App() {
             </div>
           )}
         </main>
+
+        {/* Page footer — data sources + trust cues */}
+        <footer className="mt-16 border-t border-th-border pt-8 pb-4 max-w-3xl mx-auto px-4">
+          <p className="text-th-muted text-[10px] uppercase tracking-wider mb-3 text-center">Data sources</p>
+          <div className="flex flex-wrap justify-center gap-3">
+            {[
+              { name: 'HM Land Registry', desc: 'Sold prices & HPI' },
+              { name: 'EPC Register', desc: 'Energy & floor area' },
+              { name: 'Police UK', desc: 'Crime data' },
+              { name: 'Environment Agency', desc: 'Flood risk' },
+              { name: 'PlanIt', desc: 'Planning apps' },
+              { name: 'postcodes.io', desc: 'Geolocation' },
+              { name: 'AI Analysis', desc: 'Valuation model' },
+            ].map((s) => (
+              <div key={s.name} className="flex items-center gap-1.5 bg-th-card/40 border border-th-border rounded-lg px-2.5 py-1.5">
+                <div className="w-1.5 h-1.5 rounded-full bg-cyan/60 flex-shrink-0" />
+                <div className="text-left">
+                  <p className="text-th-body text-[10px] font-medium leading-tight">{s.name}</p>
+                  <p className="text-th-faint text-[9px] leading-tight">{s.desc}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+          <div className="mt-4 flex flex-wrap justify-center gap-4 text-[11px] text-th-muted">
+            <span>No account needed</span>
+            <span>&middot;</span>
+            <span>Searches not stored</span>
+          </div>
+        </footer>
       </div>
     </div>
   );
