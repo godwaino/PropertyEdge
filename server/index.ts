@@ -1329,7 +1329,7 @@ app.post('/api/analyze', rateLimit, async (req, res) => {
 
     const prompt = `You are a UK property valuation expert and buyer's negotiation advisor. You have access to REAL Land Registry sold price data below.
 
-Today's date: ${new Date().toISOString().slice(0, 10)}. Use this when calculating how recently a sale occurred.
+Today's date: ${new Date().toISOString().slice(0, 10)}. Each comparable sale below includes a pre-computed "(Xmo ago)" annotation — use THAT value for how recently a sale occurred. Do NOT calculate months yourself.
 
 Your task: determine the REALISTIC fair market value of this property, then advise the buyer on negotiation strategy. You do NOT know the asking price — value it independently. Be conservative — overvaluation harms buyers. Anchor your valuation firmly to what comparable properties actually sold for, not to regional averages or aspirational pricing.${personaBlock}
 
@@ -1401,7 +1401,7 @@ Where:
 - summary is ONE sentence starting with "Fair value: ~£X —" followed by key reasoning
 - negotiation.offer_low = aggressive opening offer, offer_high = fair offer, walk_away = absolute max
 - negotiation.reasoning should explain WHY the opening offer is set where it is (e.g. "Open lower due to low confidence + variance")
-- negotiation.negotiation_points: exactly 3 evidence-backed talking points the buyer can use, each referencing a comp or risk
+- negotiation.negotiation_points: exactly 3 evidence-backed talking points the buyer can use, each referencing a comp or risk. When citing a sale date, use the pre-computed "(Xmo ago)" value from the data — do NOT calculate time yourself
 - comparables_used is the number of Land Registry sales used (0 if none)
 - Include at least 2 items in each of red_flags, warnings, positives`;
 
