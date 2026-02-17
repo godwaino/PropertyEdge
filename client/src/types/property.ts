@@ -40,9 +40,17 @@ export interface NegotiationData {
   negotiation_points?: string[];  // Top 3 evidence-backed talking points
 }
 
+export interface FloodRiskData {
+  riskLevel: 'Low' | 'Medium' | 'High' | 'Very Low';
+  activeWarnings: number;
+  nearestStation?: string;
+  description: string;
+}
+
 export interface AreaData {
   epcSummary?: { averageRating: string; averageFloorArea: number; totalCerts: number };
   crimeRate?: { total: number; topCategory: string; level: string };
+  floodRisk?: FloodRiskData;
 }
 
 export interface AnalysisResult {

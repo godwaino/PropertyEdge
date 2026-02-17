@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 
 const steps = [
   'Fetching sold prices and comparables',
-  'Detecting outliers and scoring similarity',
+  'Checking EPC, crime and flood risk data',
   'Running AI valuation analysis',
   'Building negotiation playbook',
 ];

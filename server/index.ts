@@ -145,9 +145,17 @@ interface ComparableSale {
   pricePsm?: number;      // £/sqm derived
 }
 
+interface FloodRiskData {
+  riskLevel: 'Low' | 'Medium' | 'High' | 'Very Low';
+  activeWarnings: number;
+  nearestStation?: string;
+  description: string;
+}
+
 interface AreaData {
   epcSummary?: { averageRating: string; averageFloorArea: number; totalCerts: number };
   crimeRate?: { total: number; topCategory: string; level: string };
+  floodRisk?: FloodRiskData;
 }
 
 // Haversine distance in miles between two lat/lng points
@@ -277,6 +285,77 @@ async function fetchCrimeData(lat: number, lng: number): Promise<AreaData['crime
     return { total, topCategory, level };
   } catch (err: any) {
     console.error('Police API failed:', err?.message);
+  }
+  return undefined;
+}
+
+// Fetch flood risk data from Environment Agency API
+async function fetchFloodRisk(lat: number, lng: number): Promise<FloodRiskData | undefined> {
+  try {
+    // Check for active flood warnings within 5km
+    const warningsRes = await fetch(
+      `https://environment.data.gov.uk/flood-monitoring/id/floods?lat=${lat}&long=${lng}&dist=5`,
+      { signal: AbortSignal.timeout(5000) }
+    );
+
+    let activeWarnings = 0;
+    let highestSeverity = 0; // 1=severe, 2=warning, 3=alert, 4=no longer in force
+
+    if (warningsRes.ok) {
+      const warningsData = await warningsRes.json() as any;
+      const items = warningsData?.items || [];
+      activeWarnings = items.filter((w: any) => w.severityLevel && w.severityLevel <= 3).length;
+      for (const item of items) {
+        const sev = item.severityLevel || 4;
+        if (sev < highestSeverity || highestSeverity === 0) highestSeverity = sev;
+      }
+    }
+
+    // Check for nearby flood monitoring stations (indicates flood-prone area)
+    const stationsRes = await fetch(
+      `https://environment.data.gov.uk/flood-monitoring/id/stations?lat=${lat}&long=${lng}&dist=3`,
+      { signal: AbortSignal.timeout(5000) }
+    );
+
+    let nearestStation: string | undefined;
+    let stationCount = 0;
+
+    if (stationsRes.ok) {
+      const stationsData = await stationsRes.json() as any;
+      const stations = stationsData?.items || [];
+      stationCount = stations.length;
+      if (stations.length > 0) {
+        nearestStation = stations[0].label || stations[0].riverName || 'Nearby station';
+      }
+    }
+
+    // Determine risk level based on active warnings and station density
+    let riskLevel: FloodRiskData['riskLevel'];
+    let description: string;
+
+    if (highestSeverity === 1) {
+      riskLevel = 'High';
+      description = `Severe flood warning active. ${activeWarnings} warning${activeWarnings > 1 ? 's' : ''} within 5km.`;
+    } else if (highestSeverity === 2) {
+      riskLevel = 'High';
+      description = `Flood warning active. ${activeWarnings} warning${activeWarnings > 1 ? 's' : ''} within 5km. Flooding expected.`;
+    } else if (highestSeverity === 3) {
+      riskLevel = 'Medium';
+      description = `Flood alert active. ${activeWarnings} alert${activeWarnings > 1 ? 's' : ''} within 5km. Flooding possible.`;
+    } else if (stationCount >= 3) {
+      riskLevel = 'Medium';
+      description = `No active warnings. ${stationCount} EA monitoring stations within 3km suggest flood-monitored area.`;
+    } else if (stationCount >= 1) {
+      riskLevel = 'Low';
+      description = `No active warnings. ${stationCount} EA monitoring station${stationCount > 1 ? 's' : ''} within 3km.`;
+    } else {
+      riskLevel = 'Very Low';
+      description = 'No active flood warnings and no EA monitoring stations nearby.';
+    }
+
+    return { riskLevel, activeWarnings, nearestStation, description };
+  } catch (err: any) {
+    console.error('Flood Risk API failed:', err?.message);
   }
   return undefined;
 }
@@ -834,11 +913,18 @@ app.post('/api/analyze', rateLimit, async (req, res) => {
       }));
     }
 
-    // Fetch crime data in parallel (non-blocking)
+    // Fetch crime and flood data in parallel (non-blocking)
     let crimeData: AreaData['crimeRate'] | undefined;
+    let floodData: FloodRiskData | undefined;
     if (subjectLocation) {
-      crimeData = await fetchCrimeData(subjectLocation.lat, subjectLocation.lng);
+      const [crimeResult, floodResult] = await Promise.all([
+        fetchCrimeData(subjectLocation.lat, subjectLocation.lng),
+        fetchFloodRisk(subjectLocation.lat, subjectLocation.lng),
+      ]);
+      crimeData = crimeResult;
+      floodData = floodResult;
       if (crimeData) dataSources.push('Police UK');
+      if (floodData) dataSources.push('Environment Agency');
     }
 
     // Enrich: similarity scores
@@ -855,6 +941,7 @@ app.post('/api/analyze', rateLimit, async (req, res) => {
     const areaData: AreaData = {
       epcSummary: summariseEpc(epcData),
       crimeRate: crimeData,
+      floodRisk: floodData,
     };
 
     dataSources.push('AI Analysis');
@@ -895,7 +982,7 @@ Property Details:
 - Year Built: ${property.yearBuilt}
 - Tenure: ${property.tenure}${leaseholdInfo}
 ${comparablesText}
-${areaData.epcSummary ? `\nAREA EPC DATA (Energy Performance Certificates):\n- Average energy rating: ${areaData.epcSummary.averageRating}\n- Average floor area: ${areaData.epcSummary.averageFloorArea}sqm\n- ${areaData.epcSummary.totalCerts} certificates in this postcode\n` : ''}${areaData.crimeRate ? `\nAREA CRIME DATA (Police UK):\n- ${areaData.crimeRate.total} crimes reported nearby (last month)\n- Most common: ${areaData.crimeRate.topCategory}\n- Crime level: ${areaData.crimeRate.level}\n` : ''}
+${areaData.epcSummary ? `\nAREA EPC DATA (Energy Performance Certificates):\n- Average energy rating: ${areaData.epcSummary.averageRating}\n- Average floor area: ${areaData.epcSummary.averageFloorArea}sqm\n- ${areaData.epcSummary.totalCerts} certificates in this postcode\n` : ''}${areaData.crimeRate ? `\nAREA CRIME DATA (Police UK):\n- ${areaData.crimeRate.total} crimes reported nearby (last month)\n- Most common: ${areaData.crimeRate.topCategory}\n- Crime level: ${areaData.crimeRate.level}\n` : ''}${areaData.floodRisk ? `\nFLOOD RISK DATA (Environment Agency):\n- Flood risk level: ${areaData.floodRisk.riskLevel}\n- Active warnings within 5km: ${areaData.floodRisk.activeWarnings}\n- ${areaData.floodRisk.description}${areaData.floodRisk.nearestStation ? `\n- Nearest monitoring station: ${areaData.floodRisk.nearestStation}` : ''}\nNote: If flood risk is Medium or High, this MUST appear in red_flags or warnings with estimated insurance/remediation cost impact.\n` : ''}
 VALUATION METHODOLOGY:
 1. ${comparables.length > 0
       ? 'USE THE REAL COMPARABLE SALES DATA ABOVE as your primary evidence. Identify the most similar properties and derive your valuation from their sold prices.'
@@ -1101,16 +1188,24 @@ app.post('/api/demo', rateLimit, async (req, res) => {
     distance: Math.round((0.1 + (i * 0.15) % 1.5) * 10) / 10,
   }));
 
-  // Crime data
+  // Crime + Flood data
   let crimeDataDemo: AreaData['crimeRate'] | undefined;
+  let floodDataDemo: FloodRiskData | undefined;
   if (locationDemo) {
-    crimeDataDemo = await fetchCrimeData(locationDemo.lat, locationDemo.lng);
+    const [crimeResult, floodResult] = await Promise.all([
+      fetchCrimeData(locationDemo.lat, locationDemo.lng),
+      fetchFloodRisk(locationDemo.lat, locationDemo.lng),
+    ]);
+    crimeDataDemo = crimeResult;
+    floodDataDemo = floodResult;
     if (crimeDataDemo) dataSources.push('Police UK');
+    if (floodDataDemo) dataSources.push('Environment Agency');
   }
 
   const areaDataDemo: AreaData = {
     epcSummary: summariseEpc(epcDataDemo),
     crimeRate: crimeDataDemo,
+    floodRisk: floodDataDemo,
   };
 
   let valuation: number;

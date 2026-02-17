@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react';
-import { AnalysisResult, AnalysisItem, PropertyInput, ComparableSale, AreaData } from '../types/property';
+import { AnalysisResult, AnalysisItem, PropertyInput, ComparableSale, AreaData, FloodRiskData } from '../types/property';
 
 interface Props {
   result: AnalysisResult;
@@ -513,8 +513,8 @@ export default function AnalysisResults({ result, property }: Props) {
         </div>
       )}
 
-      {/* Area data (EPC + Crime) */}
-      {result.area_data && (result.area_data.epcSummary || result.area_data.crimeRate) && (
+      {/* Area data (EPC + Crime + Flood) */}
+      {result.area_data && (result.area_data.epcSummary || result.area_data.crimeRate || result.area_data.floodRisk) && (
         <div className="bg-navy-card border border-gray-800 rounded-2xl p-5">
           <h3 className="text-white font-semibold text-sm mb-3">Area Intelligence</h3>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -566,6 +566,40 @@ export default function AnalysisResults({ result, property }: Props) {
                     <p className="text-gray-500 text-[10px]">Top category</p>
                   </div>
                 </div>
+              </div>
+            )}
+            {result.area_data.floodRisk && (
+              <div className="bg-navy-light/50 rounded-xl p-3">
+                <div className="flex items-center gap-2 mb-2">
+                  <span className={`w-2 h-2 rounded-full flex-shrink-0 ${
+                    result.area_data.floodRisk.riskLevel === 'Very Low' ? 'bg-cyan' :
+                    result.area_data.floodRisk.riskLevel === 'Low' ? 'bg-cyan' :
+                    result.area_data.floodRisk.riskLevel === 'Medium' ? 'bg-gold' : 'bg-pe-red'
+                  }`} />
+                  <p className="text-gray-400 text-[10px] uppercase tracking-wider font-medium">Environment Agency</p>
+                </div>
+                <div className="grid grid-cols-3 gap-2 text-center">
+                  <div>
+                    <p className={`text-sm font-bold ${
+                      result.area_data.floodRisk.riskLevel === 'Very Low' || result.area_data.floodRisk.riskLevel === 'Low' ? 'text-cyan' :
+                      result.area_data.floodRisk.riskLevel === 'Medium' ? 'text-gold' : 'text-pe-red'
+                    }`}>{result.area_data.floodRisk.riskLevel}</p>
+                    <p className="text-gray-500 text-[10px]">Flood risk</p>
+                  </div>
+                  <div>
+                    <p className={`text-sm font-bold ${
+                      result.area_data.floodRisk.activeWarnings === 0 ? 'text-white' : 'text-pe-red'
+                    }`}>{result.area_data.floodRisk.activeWarnings}</p>
+                    <p className="text-gray-500 text-[10px]">Active warnings</p>
+                  </div>
+                  <div>
+                    <p className="text-white text-sm font-bold truncate" title={result.area_data.floodRisk.nearestStation}>
+                      {result.area_data.floodRisk.nearestStation || 'None'}
+                    </p>
+                    <p className="text-gray-500 text-[10px]">Nearest station</p>
+                  </div>
+                </div>
+                <p className="text-gray-500 text-[10px] mt-2 leading-relaxed">{result.area_data.floodRisk.description}</p>
               </div>
             )}
           </div>

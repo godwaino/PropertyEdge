@@ -140,6 +140,7 @@ export default function Hero({ onAnalyseClick, onExtractListing, visible, isExtr
             { name: 'HM Land Registry', desc: 'Sold prices' },
             { name: 'EPC Register', desc: 'Energy & floor area' },
             { name: 'Police UK', desc: 'Crime data' },
+            { name: 'Environment Agency', desc: 'Flood risk' },
             { name: 'postcodes.io', desc: 'Geolocation' },
             { name: 'AI Analysis', desc: 'Valuation model' },
           ].map((s) => (
