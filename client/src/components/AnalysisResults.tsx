@@ -7,7 +7,7 @@ interface Props {
 }
 
 function fmt(n: number): string {
-  return '\u00A3' + Math.abs(n).toLocaleString();
+  return '£' + Math.abs(n).toLocaleString();
 }
 
 function verdictLabel(v: string): string {
@@ -36,7 +36,7 @@ function ConfidenceLabel({ confidence }: { confidence: number }) {
   if (confidence <= 8) { level = 'High'; color = 'text-cyan'; }
   else if (confidence <= 14) { level = 'Medium'; color = 'text-gold'; }
   else { level = 'Low'; color = 'text-pe-red'; }
-  return <span className={`text-xs font-medium ${color}`}>{level} confidence (\u00B1{confidence}%)</span>;
+  return <span className={`text-xs font-medium ${color}`}>{level} confidence (±{confidence}%)</span>;
 }
 
 function CollapsibleSection({
