@@ -780,11 +780,6 @@ export default function AnalysisResults({ result, property }: Props) {
           <CollapsibleSection title="Positives" items={result.positives} color="cyan" />
         )}
       </div>
-
-      {/* Disclaimer */}
-      <p className="text-th-faint text-[10px] text-center leading-relaxed px-4">
-        Guidance only — not a formal valuation. Verify with a RICS surveyor or qualified agent before making offers.
-      </p>
     </div>
   );
 }

@@ -263,6 +263,9 @@ export default function App() {
             <span>&middot;</span>
             <span>Searches not stored</span>
           </div>
+          <p className="mt-6 text-th-faint text-[10px] text-center leading-relaxed">
+            Guidance only — not a formal valuation. Verify with a RICS surveyor or qualified agent before making offers.
+          </p>
         </footer>
       </div>
     </div>
