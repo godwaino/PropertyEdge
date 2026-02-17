@@ -1,7 +1,7 @@
 # Plan: Make the Value Proposition Instantly Obvious
 
 ## Current State
-The page goes: Header ("Property Edge AI" + one-line tagline) → straight into a dense property form with 10+ fields. No hero, no explanation of what you get, who it's for, or why you'd use it. A first-time visitor has to read the form fields to understand what the app does.
+The page goes: Header ("Property Scorecard" + one-line tagline) → straight into a dense property form with 10+ fields. No hero, no explanation of what you get, who it's for, or why you'd use it. A first-time visitor has to read the form fields to understand what the app does.
 
 ## What I'll Build
 

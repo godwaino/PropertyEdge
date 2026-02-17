@@ -1,5 +1,6 @@
 __pycache__/
 *.pyc
+data/propertyscorecard.db
 data/propertyedge.db
 data/ppd.sqlite
 .env

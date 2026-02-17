@@ -13,12 +13,12 @@ export default function Header({ onReset, isDark, onToggleTheme }: Props) {
           {onReset ? (
             <button onClick={onReset} className="hover:opacity-80 transition-opacity">
               <span className="text-cyan dark:text-cyan">Property</span>
-              <span className="text-th-heading"> Edge</span>
+              <span className="text-th-heading"> Scorecard</span>
             </button>
           ) : (
             <>
               <span className="text-cyan dark:text-cyan">Property</span>
-              <span className="text-th-heading"> Edge</span>
+              <span className="text-th-heading"> Scorecard</span>
             </>
           )}
         </h1>

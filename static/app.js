@@ -98,7 +98,7 @@ document.addEventListener("DOMContentLoaded", () => {
   const resultDiv = document.getElementById("result");
   const resultLinks = document.getElementById("resultLinks");
 
-  console.log("PropertyEdge JavaScript loaded");
+  console.log("Property Scorecard JavaScript loaded");
 
   form.addEventListener("submit", async (e) => {
     e.preventDefault();

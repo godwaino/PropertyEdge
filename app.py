@@ -5,11 +5,11 @@ import traceback
 from datetime import datetime
 from flask import Flask, render_template, request, jsonify, abort, send_file
 from storage import init_db, save_analysis, list_analyses, get_analysis
-from propertyedge_core import run_propertyedge
+from propertyscorecard_core import run_propertyscorecard
 
 APP_DIR = os.path.dirname(os.path.abspath(__file__))
 DATA_DIR = os.path.join(APP_DIR, "data")
-DB_PATH = os.path.join(DATA_DIR, "propertyedge.db")
+DB_PATH = os.path.join(DATA_DIR, "propertyscorecard.db")
 PPD_SQLITE_PATH = os.path.join(DATA_DIR, "ppd.sqlite")  # optional (for sold comps)
 
 os.makedirs(DATA_DIR, exist_ok=True)
@@ -39,7 +39,7 @@ def analyze():
     # Run analysis
     try:
         print(f"[DEBUG] Starting analysis for URL: {url}")
-        result = run_propertyedge(
+        result = run_propertyscorecard(
             url=url,
             ppd_sqlite_path=PPD_SQLITE_PATH if os.path.exists(PPD_SQLITE_PATH) else None,
         )
@@ -92,13 +92,13 @@ def analysis_md(analysis_id: int):
     # Write to a temp file-like response
     from io import BytesIO
     buf = BytesIO(md.encode("utf-8"))
-    filename = f"propertyedge_{row.get('property_id') or analysis_id}.md"
+    filename = f"propertyscorecard_{row.get('property_id') or analysis_id}.md"
     return send_file(buf, as_attachment=True, download_name=filename, mimetype="text/markdown")
 
 
 if __name__ == "__main__":
     # local dev
-    print(f"[INFO] Starting PropertyEdge server...")
+    print(f"[INFO] Starting Property Scorecard server...")
     print(f"[INFO] Data directory: {DATA_DIR}")
     print(f"[INFO] Database path: {DB_PATH}")
     print(f"[INFO] PPD SQLite exists: {os.path.exists(PPD_SQLITE_PATH)}")

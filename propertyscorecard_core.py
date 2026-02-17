@@ -419,7 +419,7 @@ def offer_strategy(facts: ListingFacts, fair_low: Optional[int], fair_mid: Optio
 
 def render_markdown(facts: ListingFacts, comps: List[Comp], valuation: Dict[str, Any]) -> str:
     lines = []
-    lines.append(f"# PropertyEdge AI Report — {facts.property_id}")
+    lines.append(f"# Property Scorecard Report — {facts.property_id}")
     lines.append("")
     lines.append(f"**Source:** {facts.url}")
     lines.append("")
@@ -451,7 +451,7 @@ def render_markdown(facts: ListingFacts, comps: List[Comp], valuation: Dict[str,
     lines.append("## Valuation")
     lines.append(f"- Fair value (low/mid/high): {valuation.get('fair_value_range','—')}")
     lines.append(f"- Asking vs fair-mid: {valuation.get('asking_vs_mid','—')}")
-    lines.append(f"- PropertyEdge score: {valuation.get('score','—')} — {valuation.get('label','—')}")
+    lines.append(f"- Property Scorecard score: {valuation.get('score','—')} — {valuation.get('label','—')}")
     lines.append(f"- Offer anchor: {valuation.get('offer_anchor','—')}")
     lines.append(f"- Offer band: {valuation.get('offer_band','—')}")
     lines.append("")
@@ -459,7 +459,7 @@ def render_markdown(facts: ListingFacts, comps: List[Comp], valuation: Dict[str,
     return "\n".join(lines)
 
 
-def run_propertyedge(url: str, ppd_sqlite_path: Optional[str]) -> Dict[str, Any]:
+def run_propertyscorecard(url: str, ppd_sqlite_path: Optional[str]) -> Dict[str, Any]:
     facts = parse_listing(url)
     
     # Fail fast if critical facts are missing

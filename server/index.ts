@@ -1570,12 +1570,12 @@ app.get('*', (_req, res) => {
     res.sendFile(indexPath);
   } else {
     res.status(200).send(
-      '<h1>Property Edge v2</h1><p>Frontend not built yet. Run <code>npm run build</code> then restart.</p>'
+      '<h1>Property Scorecard</h1><p>Frontend not built yet. Run <code>npm run build</code> then restart.</p>'
     );
   }
 });
 
 app.listen(Number(PORT), '0.0.0.0', () => {
-  console.log(`\nProperty Edge v2 running at http://localhost:${PORT}`);
+  console.log(`\nProperty Scorecard running at http://localhost:${PORT}`);
   console.log(`API key: ${process.env.ANTHROPIC_API_KEY ? 'configured' : 'NOT configured (demo mode only)'}\n`);
 });

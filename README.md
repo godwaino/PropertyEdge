@@ -1,6 +1,6 @@
-# PropertyEdge AI
+# Property Scorecard
 
-Dashboard-driven PropertyEdge analysis for Rightmove links.
+AI-powered UK property analysis for Rightmove links.
 
 ## Run locally
 ```bash
