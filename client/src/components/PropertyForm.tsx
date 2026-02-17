@@ -149,18 +149,18 @@ export default function PropertyForm({ onSubmit, isLoading, autoOpenImport, coll
   };
 
   const inputClass =
-    'w-full bg-navy-light border border-gray-700 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-cyan transition-colors';
+    'w-full bg-th-input border border-th-border rounded-lg px-3 py-2 text-th-heading text-sm focus:outline-none focus:border-cyan transition-colors';
   const errorInputClass =
-    'w-full bg-navy-light border border-pe-red/50 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-pe-red transition-colors';
-  const labelClass = 'block text-gray-400 text-xs mb-1';
-  const helperClass = 'text-gray-600 text-[11px] mt-0.5';
+    'w-full bg-th-input border border-pe-red/50 rounded-lg px-3 py-2 text-th-heading text-sm focus:outline-none focus:border-pe-red transition-colors';
+  const labelClass = 'block text-th-secondary text-xs mb-1';
+  const helperClass = 'text-th-faint text-[11px] mt-0.5';
   const errorClass = 'text-pe-red text-[11px] mt-0.5';
 
   return (
     <form
       id="analyze"
       onSubmit={handleSubmit}
-      className="w-full max-w-4xl mx-auto bg-navy-card border border-gray-800 rounded-2xl p-6"
+      className="w-full max-w-4xl mx-auto bg-th-card border border-th-border rounded-2xl p-6"
     >
       {/* Collapsed summary bar */}
       {!formExpanded && (
@@ -170,12 +170,12 @@ export default function PropertyForm({ onSubmit, isLoading, autoOpenImport, coll
           className="w-full flex items-center justify-between text-left"
         >
           <div className="flex items-center gap-3 text-sm">
-            <span className="text-gray-500 text-xs">&#9654;</span>
-            <span className="text-white font-medium truncate">{fields.address}, {fields.postcode}</span>
-            <span className="text-gray-500">&middot;</span>
-            <span className="text-gray-400">&pound;{formatPrice(fields.askingPrice)}</span>
-            <span className="text-gray-500">&middot;</span>
-            <span className="text-gray-400">{fields.bedrooms} bed {fields.propertyType}</span>
+            <span className="text-th-muted text-xs">&#9654;</span>
+            <span className="text-th-heading font-medium truncate">{fields.address}, {fields.postcode}</span>
+            <span className="text-th-muted">&middot;</span>
+            <span className="text-th-secondary">&pound;{formatPrice(fields.askingPrice)}</span>
+            <span className="text-th-muted">&middot;</span>
+            <span className="text-th-secondary">{fields.bedrooms} bed {fields.propertyType}</span>
           </div>
           <span className="text-cyan text-xs whitespace-nowrap ml-4">Edit details</span>
         </button>
@@ -196,7 +196,7 @@ export default function PropertyForm({ onSubmit, isLoading, autoOpenImport, coll
 
         {showImport && (
           <div className="mt-3">
-            <p className="text-gray-500 text-xs mb-2">
+            <p className="text-th-muted text-xs mb-2">
               Copy the listing text (title, price, description) and paste it below.
             </p>
             <textarea
@@ -221,10 +221,10 @@ export default function PropertyForm({ onSubmit, isLoading, autoOpenImport, coll
         )}
       </div>
 
-      <div className="border-t border-gray-800 mb-5" />
+      <div className="border-t border-th-border mb-5" />
 
       {/* Section A: Core Details */}
-      <h2 className="text-sm font-semibold text-white mb-3 uppercase tracking-wider">
+      <h2 className="text-sm font-semibold text-th-heading mb-3 uppercase tracking-wider">
         Core Details
       </h2>
 
@@ -253,7 +253,7 @@ export default function PropertyForm({ onSubmit, isLoading, autoOpenImport, coll
         <div>
           <label className={labelClass}>Asking Price</label>
           <div className="relative">
-            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 text-sm">&pound;</span>
+            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-th-muted text-sm">&pound;</span>
             <input
               type="text"
               inputMode="numeric"
@@ -299,11 +299,11 @@ export default function PropertyForm({ onSubmit, isLoading, autoOpenImport, coll
         <button
           type="button"
           onClick={() => setShowOptional(!showOptional)}
-          className="text-xs text-gray-400 hover:text-gray-300 transition-colors flex items-center gap-1.5"
+          className="text-xs text-th-secondary hover:text-th-body transition-colors flex items-center gap-1.5"
         >
           <span className={`inline-block transition-transform ${showOptional ? 'rotate-90' : ''}`}>&#9654;</span>
           Optional refinements
-          <span className="text-gray-600 ml-1">(approx is fine)</span>
+          <span className="text-th-faint ml-1">(approx is fine)</span>
         </button>
 
         {showOptional && (
@@ -347,7 +347,7 @@ export default function PropertyForm({ onSubmit, isLoading, autoOpenImport, coll
                     className={`flex-1 px-3 py-2 rounded-lg text-sm border transition-all ${
                       tenure === t
                         ? 'border-cyan bg-cyan/10 text-cyan'
-                        : 'border-gray-700 text-gray-400 hover:border-gray-500'
+                        : 'border-th-border text-th-secondary hover:border-th-muted'
                     }`}
                   >
                     {t.charAt(0).toUpperCase() + t.slice(1)}
@@ -380,13 +380,13 @@ export default function PropertyForm({ onSubmit, isLoading, autoOpenImport, coll
       <button
         type="submit"
         disabled={isLoading}
-        className="mt-6 w-full py-3 rounded-xl font-semibold text-navy bg-cyan hover:bg-cyan/90 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+        className="mt-6 w-full py-3 rounded-xl font-semibold text-white bg-cyan hover:bg-cyan/90 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
       >
         {isLoading ? 'Analysing...' : 'Analyse Property'}
       </button>
 
       {/* Trust cue */}
-      <p className="mt-2 text-center text-gray-600 text-[11px]">
+      <p className="mt-2 text-center text-th-faint text-[11px]">
         Uses HM Land Registry sold prices, postcodes.io and AI analysis
       </p>
       </>}

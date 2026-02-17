@@ -6,12 +6,42 @@
   box-sizing: border-box;
 }
 
+/* ─── Theme colour tokens ────────────────────────────────── */
+/* Light theme (default) */
+:root {
+  --c-page:     248 250 252;   /* slate-50  */
+  --c-card:     255 255 255;   /* white     */
+  --c-input:    241 245 249;   /* slate-100 */
+  --c-heading:  15  23  42;    /* slate-900 */
+  --c-body:     51  65  85;    /* slate-600 */
+  --c-secondary:100 116 139;   /* slate-500 */
+  --c-muted:    148 163 184;   /* slate-400 */
+  --c-faint:    203 213 225;   /* slate-300 */
+  --c-border:   226 232 240;   /* slate-200 */
+  --c-skeleton: 226 232 240;   /* slate-200 */
+}
+
+/* Dark theme */
+.dark {
+  --c-page:     10  25  41;    /* navy      */
+  --c-card:     13  33  55;    /* navy-light */
+  --c-input:    13  33  55;    /* navy-light */
+  --c-heading:  255 255 255;   /* white     */
+  --c-body:     209 213 219;   /* gray-300  */
+  --c-secondary:156 163 175;   /* gray-400  */
+  --c-muted:    107 114 128;   /* gray-500  */
+  --c-faint:    75  85  99;    /* gray-600  */
+  --c-border:   31  41  55;    /* gray-800  */
+  --c-skeleton: 31  41  55;    /* gray-800  */
+}
+
 body {
   margin: 0;
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   -webkit-font-smoothing: antialiased;
-  background: #0a0f1c;
-  color: #e5e7eb;
+  background: rgb(var(--c-page));
+  color: rgb(var(--c-body));
+  transition: background-color 0.3s ease, color 0.3s ease;
 }
 
 @keyframes pulse-glow {

@@ -1,6 +1,7 @@
 /** @type {import('tailwindcss').Config} */
 export default {
   content: ['./index.html', './src/**/*.{js,ts,jsx,tsx}'],
+  darkMode: 'class',
   theme: {
     extend: {
       colors: {
@@ -16,6 +17,17 @@ export default {
         gold: '#FFD700',
         'pe-green': '#00FF00',
         'pe-red': '#FF4444',
+        // Semantic theme colors (CSS custom properties)
+        'th-page':    'rgb(var(--c-page) / <alpha-value>)',
+        'th-card':    'rgb(var(--c-card) / <alpha-value>)',
+        'th-input':   'rgb(var(--c-input) / <alpha-value>)',
+        'th-heading':  'rgb(var(--c-heading) / <alpha-value>)',
+        'th-body':     'rgb(var(--c-body) / <alpha-value>)',
+        'th-secondary':'rgb(var(--c-secondary) / <alpha-value>)',
+        'th-muted':    'rgb(var(--c-muted) / <alpha-value>)',
+        'th-faint':    'rgb(var(--c-faint) / <alpha-value>)',
+        'th-border':   'rgb(var(--c-border) / <alpha-value>)',
+        'th-skeleton': 'rgb(var(--c-skeleton) / <alpha-value>)',
       },
       fontFamily: {
         sans: ['Inter', 'system-ui', 'sans-serif'],

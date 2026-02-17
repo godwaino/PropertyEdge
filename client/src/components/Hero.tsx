@@ -69,13 +69,13 @@ export default function Hero({ onAnalyseClick, onExtractListing, onTryExample, v
   return (
     <section className="max-w-4xl mx-auto px-4 pt-2 pb-8 text-center animate-slide-up">
       {/* Headline */}
-      <h2 className="text-3xl sm:text-4xl md:text-5xl font-bold text-white leading-tight">
+      <h2 className="text-3xl sm:text-4xl md:text-5xl font-bold text-th-heading leading-tight">
         Is this property{' '}
         <span className="text-cyan">worth it</span>?
       </h2>
 
       {/* 1-line promise */}
-      <p className="mt-3 text-gray-400 text-base sm:text-lg max-w-2xl mx-auto">
+      <p className="mt-3 text-th-secondary text-base sm:text-lg max-w-2xl mx-auto">
         Get valuation, risks and negotiation points. Typically under 10 seconds.
       </p>
 
@@ -88,28 +88,28 @@ export default function Hero({ onAnalyseClick, onExtractListing, onTryExample, v
             onKeyDown={handleKeyDown}
             placeholder="Paste a Rightmove / Zoopla link or listing text..."
             rows={2}
-            className="flex-1 bg-navy-light border border-gray-700 rounded-xl px-4 py-3 text-white text-sm placeholder-gray-500 focus:outline-none focus:border-cyan transition-colors resize-none"
+            className="flex-1 bg-th-input border border-th-border rounded-xl px-4 py-3 text-th-heading text-sm placeholder-th-muted focus:outline-none focus:border-cyan transition-colors resize-none"
           />
           <button
             onClick={handlePasteAnalyse}
             disabled={isExtracting}
-            className="px-6 py-3 rounded-xl font-semibold text-navy bg-cyan hover:bg-cyan/90 disabled:opacity-50 transition-all text-sm whitespace-nowrap shadow-lg shadow-cyan/20 self-end"
+            className="px-6 py-3 rounded-xl font-semibold text-white bg-cyan hover:bg-cyan/90 disabled:opacity-50 transition-all text-sm whitespace-nowrap shadow-lg shadow-cyan/20 self-end"
           >
             {isExtracting ? 'Extracting...' : 'Analyse'}
           </button>
         </div>
-        <p className="mt-2 text-gray-600 text-xs">
+        <p className="mt-2 text-th-faint text-xs">
           We&apos;ll auto-fill the details for you. Or <button onClick={onAnalyseClick} className="text-cyan/70 hover:text-cyan underline-offset-2 underline">fill in details manually</button>
         </p>
 
         {/* Try an example */}
         <div className="mt-3 flex flex-wrap items-center justify-center gap-2">
-          <span className="text-gray-600 text-[11px]">Try an example:</span>
+          <span className="text-th-faint text-[11px]">Try an example:</span>
           {EXAMPLES.map((ex, i) => (
             <button
               key={i}
               onClick={() => onTryExample(ex.property)}
-              className="text-[11px] px-2.5 py-1 rounded-full border border-gray-700 text-gray-400 hover:text-cyan hover:border-cyan/50 bg-navy-light/40 transition-colors"
+              className="text-[11px] px-2.5 py-1 rounded-full border border-th-border text-th-secondary hover:text-cyan hover:border-cyan/50 bg-th-input/40 transition-colors"
             >
               {ex.label}
             </button>
@@ -126,7 +126,7 @@ export default function Hero({ onAnalyseClick, onExtractListing, onTryExample, v
             className={`px-3 py-1 rounded-full text-xs font-medium border transition-all ${
               selectedPersona === a.label
                 ? 'border-cyan bg-cyan/15 text-cyan'
-                : 'border-gray-700 text-gray-300 bg-navy-light/50 hover:border-gray-500'
+                : 'border-th-border text-th-body bg-th-input/50 hover:border-th-muted'
             }`}
           >
             {a.label}
@@ -144,17 +144,17 @@ export default function Hero({ onAnalyseClick, onExtractListing, onTryExample, v
             key={f.label}
             type="button"
             onClick={() => document.getElementById(f.anchor)?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
-            className="bg-navy-card/60 border border-gray-800 rounded-xl px-3 py-3 text-center hover:border-gray-600 transition-colors"
+            className="bg-th-card/60 border border-th-border rounded-xl px-3 py-3 text-center hover:border-th-muted transition-colors"
           >
-            <p className="text-white text-xs font-semibold">{f.label}</p>
-            <p className="text-gray-500 text-[11px] mt-1 leading-snug">{f.desc}</p>
+            <p className="text-th-heading text-xs font-semibold">{f.label}</p>
+            <p className="text-th-muted text-[11px] mt-1 leading-snug">{f.desc}</p>
           </button>
         ))}
       </div>
 
       {/* Data sources strip */}
       <div className="mt-6 max-w-3xl mx-auto">
-        <p className="text-gray-600 text-[10px] uppercase tracking-wider mb-2">Data sources</p>
+        <p className="text-th-faint text-[10px] uppercase tracking-wider mb-2">Data sources</p>
         <div className="flex flex-wrap justify-center gap-3">
           {[
             { name: 'HM Land Registry', desc: 'Sold prices & HPI' },
@@ -165,11 +165,11 @@ export default function Hero({ onAnalyseClick, onExtractListing, onTryExample, v
             { name: 'postcodes.io', desc: 'Geolocation' },
             { name: 'AI Analysis', desc: 'Valuation model' },
           ].map((s) => (
-            <div key={s.name} className="flex items-center gap-1.5 bg-navy-card/40 border border-gray-800 rounded-lg px-2.5 py-1.5">
+            <div key={s.name} className="flex items-center gap-1.5 bg-th-card/40 border border-th-border rounded-lg px-2.5 py-1.5">
               <div className="w-1.5 h-1.5 rounded-full bg-cyan/60 flex-shrink-0" />
               <div className="text-left">
-                <p className="text-gray-300 text-[10px] font-medium leading-tight">{s.name}</p>
-                <p className="text-gray-600 text-[9px] leading-tight">{s.desc}</p>
+                <p className="text-th-body text-[10px] font-medium leading-tight">{s.name}</p>
+                <p className="text-th-faint text-[9px] leading-tight">{s.desc}</p>
               </div>
             </div>
           ))}
@@ -177,7 +177,7 @@ export default function Hero({ onAnalyseClick, onExtractListing, onTryExample, v
       </div>
 
       {/* Trust cues */}
-      <div className="mt-3 flex flex-wrap justify-center gap-4 text-[11px] text-gray-500">
+      <div className="mt-3 flex flex-wrap justify-center gap-4 text-[11px] text-th-muted">
         <span>No account needed</span>
         <span>&middot;</span>
         <span>Searches not stored</span>

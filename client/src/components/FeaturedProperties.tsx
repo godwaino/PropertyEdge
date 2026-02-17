@@ -158,9 +158,9 @@ export default function FeaturedProperties({ onSelect, visible }: Props) {
   return (
     <section className="max-w-5xl mx-auto px-4 pb-10 animate-slide-up">
       <div className="text-center mb-5">
-        <p className="text-gray-500 text-[10px] uppercase tracking-wider mb-1">Recently analysed</p>
-        <h3 className="text-white text-lg font-semibold">Featured Properties</h3>
-        <p className="text-gray-500 text-xs mt-1">Click any card to run a full live analysis</p>
+        <p className="text-th-muted text-[10px] uppercase tracking-wider mb-1">Example properties</p>
+        <h3 className="text-th-heading text-lg font-semibold">Featured Properties</h3>
+        <p className="text-th-muted text-xs mt-1">Click any card to run a full live analysis</p>
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -171,13 +171,13 @@ export default function FeaturedProperties({ onSelect, visible }: Props) {
             <button
               key={i}
               onClick={() => onSelect(fp.property)}
-              className="bg-navy-card border border-gray-800 rounded-2xl p-4 text-left hover:border-gray-600 hover:bg-navy-card/80 transition-all group"
+              className="bg-th-card border border-th-border rounded-2xl p-4 text-left hover:border-th-muted hover:shadow-lg transition-all group"
             >
               {/* Header row */}
               <div className="flex items-start justify-between gap-2 mb-3">
                 <div className="flex-1 min-w-0">
-                  <p className="text-white text-sm font-semibold truncate group-hover:text-cyan transition-colors">{fp.label}</p>
-                  <p className="text-gray-500 text-xs">{fp.location}</p>
+                  <p className="text-th-heading text-sm font-semibold truncate group-hover:text-cyan transition-colors">{fp.label}</p>
+                  <p className="text-th-muted text-xs">{fp.location}</p>
                 </div>
                 <span className={`text-[10px] px-2 py-0.5 rounded-full border font-medium flex-shrink-0 ${v.bg} ${v.text}`}>
                   {v.label}
@@ -187,11 +187,11 @@ export default function FeaturedProperties({ onSelect, visible }: Props) {
               {/* Price row */}
               <div className="flex items-baseline gap-3 mb-3">
                 <div>
-                  <p className="text-gray-500 text-[10px]">Asking</p>
-                  <p className="text-white text-sm font-bold">{fmt(fp.askingPrice)}</p>
+                  <p className="text-th-muted text-[10px]">Asking</p>
+                  <p className="text-th-heading text-sm font-bold">{fmt(fp.askingPrice)}</p>
                 </div>
                 <div>
-                  <p className="text-gray-500 text-[10px]">Est. value</p>
+                  <p className="text-th-muted text-[10px]">Est. value</p>
                   <p className={`text-sm font-bold ${v.text}`}>{fmt(fp.valuation)}</p>
                 </div>
                 {diff !== 0 && (
@@ -205,16 +205,16 @@ export default function FeaturedProperties({ onSelect, visible }: Props) {
               <div className="space-y-1.5">
                 <div className="flex items-start gap-1.5">
                   <span className="w-1.5 h-1.5 rounded-full bg-pe-red mt-1.5 flex-shrink-0" />
-                  <p className="text-gray-400 text-[11px] leading-snug">{fp.flag}</p>
+                  <p className="text-th-secondary text-[11px] leading-snug">{fp.flag}</p>
                 </div>
                 <div className="flex items-start gap-1.5">
                   <span className="w-1.5 h-1.5 rounded-full bg-cyan mt-1.5 flex-shrink-0" />
-                  <p className="text-gray-400 text-[11px] leading-snug">{fp.positive}</p>
+                  <p className="text-th-secondary text-[11px] leading-snug">{fp.positive}</p>
                 </div>
               </div>
 
               {/* CTA hint */}
-              <p className="text-gray-600 text-[10px] mt-3 group-hover:text-gray-400 transition-colors text-center">
+              <p className="text-th-faint text-[10px] mt-3 group-hover:text-th-secondary transition-colors text-center">
                 Click to analyse
               </p>
             </button>

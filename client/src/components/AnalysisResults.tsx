@@ -47,11 +47,11 @@ function ConfidenceLabel({ confidence, drivers }: { confidence: number; drivers?
         {level} confidence (±{confidence}%)
       </button>
       {showDrivers && drivers && drivers.length > 0 && (
-        <div className="absolute z-10 top-full left-1/2 -translate-x-1/2 mt-2 w-64 bg-navy-light border border-gray-700 rounded-xl p-3 shadow-lg">
-          <p className="text-gray-400 text-[10px] uppercase tracking-wider mb-1.5 font-medium">Why {level.toLowerCase()} confidence</p>
+        <div className="absolute z-10 top-full left-1/2 -translate-x-1/2 mt-2 w-64 bg-th-card border border-th-border rounded-xl p-3 shadow-lg">
+          <p className="text-th-secondary text-[10px] uppercase tracking-wider mb-1.5 font-medium">Why {level.toLowerCase()} confidence</p>
           <ul className="space-y-1">
             {drivers.map((d, i) => (
-              <li key={i} className="flex items-start gap-1.5 text-xs text-gray-300">
+              <li key={i} className="flex items-start gap-1.5 text-xs text-th-body">
                 <span className={`mt-1 w-1.5 h-1.5 rounded-full flex-shrink-0 ${color === 'text-cyan' ? 'bg-cyan' : color === 'text-gold' ? 'bg-gold' : 'bg-pe-red'}`} />
                 {d}
               </li>
@@ -59,7 +59,7 @@ function ConfidenceLabel({ confidence, drivers }: { confidence: number; drivers?
           </ul>
           <button
             onClick={(e) => { e.stopPropagation(); setShowDrivers(false); }}
-            className="text-gray-500 text-[10px] mt-2 hover:text-gray-300"
+            className="text-th-muted text-[10px] mt-2 hover:text-th-body"
           >
             Close
           </button>
@@ -74,11 +74,9 @@ const CRITICAL_PATTERNS = /\b(lease|service charge|ground rent|flood|subsidence|
 
 function rankByMateriality(items: AnalysisItem[]): AnalysisItem[] {
   return [...items].sort((a, b) => {
-    // Critical issues always float to the top
     const aCritical = CRITICAL_PATTERNS.test(a.title) || CRITICAL_PATTERNS.test(a.description) ? 1 : 0;
     const bCritical = CRITICAL_PATTERNS.test(b.title) || CRITICAL_PATTERNS.test(b.description) ? 1 : 0;
     if (aCritical !== bCritical) return bCritical - aCritical;
-    // Then sort by impact (highest first)
     return b.impact - a.impact;
   });
 }
@@ -110,8 +108,8 @@ function CollapsibleSection({
       <div className="flex items-center justify-between py-2">
         <div className="flex items-center gap-2">
           <div className={`w-2 h-2 rounded-full ${c.dot} flex-shrink-0`} />
-          <h3 className="text-white font-semibold text-sm">{title}</h3>
-          <span className="text-gray-500 text-xs">({items.length})</span>
+          <h3 className="text-th-heading font-semibold text-sm">{title}</h3>
+          <span className="text-th-muted text-xs">({items.length})</span>
         </div>
         <span className={`text-xs px-2 py-0.5 rounded ${c.badge}`}>
           {fmt(totalImpact)} est. impact
@@ -120,13 +118,13 @@ function CollapsibleSection({
 
       <div className="space-y-2 mt-1 mb-2">
         {visible.map((item, i) => (
-          <div key={i} className={`bg-navy-light border ${c.border} rounded-xl p-4`}>
+          <div key={i} className={`bg-th-input border ${c.border} rounded-xl p-4`}>
             <div className="flex items-start justify-between gap-3">
               <div className="flex items-start gap-2 flex-1">
                 <div className={`w-1.5 h-1.5 rounded-full ${c.dot} mt-1.5 flex-shrink-0`} />
                 <div>
-                  <p className="text-white font-medium text-sm">{item.title}</p>
-                  <p className="text-gray-400 text-xs mt-1 leading-relaxed">{item.description}</p>
+                  <p className="text-th-heading font-medium text-sm">{item.title}</p>
+                  <p className="text-th-secondary text-xs mt-1 leading-relaxed">{item.description}</p>
                 </div>
               </div>
               <span className={`text-xs px-2 py-1 rounded-md ${c.badge} whitespace-nowrap`}>
@@ -178,7 +176,6 @@ function CompsTable({ comparables }: { comparables: ComparableSale[] }) {
 
   return (
     <div className="mt-3">
-      {/* Sort chips */}
       <div className="flex gap-2 mb-3 flex-wrap">
         {chips.map(chip => (
           <button
@@ -187,7 +184,7 @@ function CompsTable({ comparables }: { comparables: ComparableSale[] }) {
             className={`text-[11px] px-2.5 py-1 rounded-full border transition-colors ${
               sort === chip.key
                 ? 'border-cyan/50 text-cyan bg-cyan/10'
-                : 'border-gray-700 text-gray-400 hover:text-gray-300 hover:border-gray-600'
+                : 'border-th-border text-th-secondary hover:text-th-body hover:border-th-muted'
             }`}
           >
             {chip.label}
@@ -198,7 +195,7 @@ function CompsTable({ comparables }: { comparables: ComparableSale[] }) {
       <div className="overflow-x-auto">
         <table className="w-full text-xs">
           <thead>
-            <tr className="text-gray-500 uppercase tracking-wider border-b border-gray-800">
+            <tr className="text-th-muted uppercase tracking-wider border-b border-th-border">
               <th className="text-left py-2 pr-3">Price</th>
               <th className="text-left py-2 pr-3">Date</th>
               <th className="text-left py-2 pr-3">Address</th>
@@ -214,11 +211,11 @@ function CompsTable({ comparables }: { comparables: ComparableSale[] }) {
             {sorted.map((c, i) => (
               <tr
                 key={i}
-                className={`border-b border-gray-800/50 ${
-                  c.excluded ? 'opacity-50' : 'text-gray-300'
+                className={`border-b border-th-border/50 ${
+                  c.excluded ? 'opacity-50' : 'text-th-body'
                 }`}
               >
-                <td className={`py-2 pr-3 font-medium ${c.excluded ? 'text-gray-500 line-through' : 'text-white'}`}>
+                <td className={`py-2 pr-3 font-medium ${c.excluded ? 'text-th-muted line-through' : 'text-th-heading'}`}>
                   {fmt(c.price)}
                 </td>
                 <td className="py-2 pr-3">{c.date}</td>
@@ -233,7 +230,7 @@ function CompsTable({ comparables }: { comparables: ComparableSale[] }) {
                     }`}>{c.epcRating}</span>
                   ) : '—'}
                 </td>
-                <td className="py-2 pr-3 text-center text-gray-400">
+                <td className="py-2 pr-3 text-center text-th-secondary">
                   {c.pricePsm ? `£${c.pricePsm.toLocaleString()}` : '—'}
                 </td>
                 <td className="py-2 pr-3 text-center">
@@ -244,7 +241,7 @@ function CompsTable({ comparables }: { comparables: ComparableSale[] }) {
                     <span className={`inline-block px-1.5 py-0.5 rounded text-[10px] font-medium ${
                       c.similarity >= 70 ? 'bg-cyan/10 text-cyan' :
                       c.similarity >= 40 ? 'bg-gold/10 text-gold' :
-                      'bg-gray-700 text-gray-400'
+                      'bg-th-skeleton text-th-secondary'
                     }`}>
                       {c.similarity}
                     </span>
@@ -266,11 +263,10 @@ function CompsTable({ comparables }: { comparables: ComparableSale[] }) {
           </tbody>
         </table>
 
-        {/* Excluded reasons */}
         {sorted.some(c => c.excluded) && (
           <div className="mt-2 space-y-1">
             {sorted.filter(c => c.excluded).map((c, i) => (
-              <p key={i} className="text-[10px] text-gray-500 flex items-center gap-1">
+              <p key={i} className="text-[10px] text-th-muted flex items-center gap-1">
                 <span className="w-1.5 h-1.5 rounded-full bg-pe-red/50 flex-shrink-0" />
                 {c.address}: {c.excludeReason}
               </p>
@@ -307,7 +303,6 @@ function buildEmailDraft(property: PropertyInput, result: AnalysisResult): strin
   const neg = result.negotiation;
   let body = `Dear Agent,\n\nI am interested in the property at ${property.address}, ${property.postcode} (asking ${fmt(property.askingPrice)}).\n\n`;
 
-  // Verdict + fair value
   body += `My research suggests a fair value of approximately ${fmt(result.valuation.amount)}, which is ${
     result.verdict === 'OVERPRICED' ? 'below the current asking price' :
     result.verdict === 'GOOD_DEAL' ? 'above the current asking price' :
@@ -318,7 +313,6 @@ function buildEmailDraft(property: PropertyInput, result: AnalysisResult): strin
     body += `I would like to make an initial offer of ${fmt(neg.offer_low)}, with a view to agreeing around ${fmt(neg.offer_high)}.\n\n`;
     body += `My reasoning:\n${neg.reasoning}\n\n`;
 
-    // Top talking points
     if (neg.negotiation_points && neg.negotiation_points.length > 0) {
       body += `Key observations:\n`;
       neg.negotiation_points.forEach((p, i) => { body += `${i + 1}. ${p}\n`; });
@@ -347,7 +341,6 @@ export default function AnalysisResults({ result, property }: Props) {
   const agentQuestions = buildAgentQuestions(property, result);
   const neg = result.negotiation;
 
-  // Build the one-liner verdict
   const savingsAbs = Math.abs(result.savings);
   const verdictOneLiner = result.verdict === 'GOOD_DEAL'
     ? `Overall: ${verdictLabel(result.verdict)} at ${fmt(property.askingPrice)} — ${fmt(savingsAbs)} below our valuation of ${fmt(result.valuation.amount)}.`
@@ -359,20 +352,19 @@ export default function AnalysisResults({ result, property }: Props) {
     <div className="w-full max-w-4xl mx-auto mt-8 animate-slide-up space-y-4">
 
       {/* One-liner verdict */}
-      <div id="section-verdict" className="bg-navy-card border border-gray-800 rounded-2xl px-6 py-4">
-        <p className="text-white text-sm font-medium leading-relaxed">{verdictOneLiner}</p>
+      <div id="section-verdict" className="bg-th-card border border-th-border rounded-2xl px-6 py-4">
+        <p className="text-th-heading text-sm font-medium leading-relaxed">{verdictOneLiner}</p>
         {result.summary && (
-          <p className="text-gray-400 text-xs mt-2 leading-relaxed">{result.summary}</p>
+          <p className="text-th-secondary text-xs mt-2 leading-relaxed">{result.summary}</p>
         )}
       </div>
 
       {/* 3-block top summary */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        {/* Block 1: Valuation */}
-        <div id="section-comps" className="bg-navy-card border border-gray-800 rounded-2xl p-5 text-center">
-          <p className="text-gray-400 text-xs uppercase tracking-wider mb-1">AI Valuation</p>
-          <p className="text-2xl font-bold text-white">{fmt(result.valuation.amount)}</p>
-          <p className="text-gray-500 text-xs mt-1">Asking: {fmt(property.askingPrice)}</p>
+        <div id="section-comps" className="bg-th-card border border-th-border rounded-2xl p-5 text-center">
+          <p className="text-th-secondary text-xs uppercase tracking-wider mb-1">AI Valuation</p>
+          <p className="text-2xl font-bold text-th-heading">{fmt(result.valuation.amount)}</p>
+          <p className="text-th-muted text-xs mt-1">Asking: {fmt(property.askingPrice)}</p>
           <div className="mt-2">
             <ConfidenceLabel
               confidence={result.valuation.confidence}
@@ -392,8 +384,7 @@ export default function AnalysisResults({ result, property }: Props) {
           )}
         </div>
 
-        {/* Block 2: Verdict */}
-        <div className="bg-navy-card border border-gray-800 rounded-2xl p-5 flex flex-col items-center justify-center">
+        <div className="bg-th-card border border-th-border rounded-2xl p-5 flex flex-col items-center justify-center">
           <VerdictBadge verdict={result.verdict} />
           {result.savings > 0 && (
             <p className="text-pe-red text-sm mt-2">Overpay risk: {fmt(result.savings)}</p>
@@ -402,32 +393,31 @@ export default function AnalysisResults({ result, property }: Props) {
             <p className="text-cyan text-sm mt-2">Negotiation headroom: ~{fmt(savingsAbs)}</p>
           )}
           {result.savings === 0 && (
-            <p className="text-gray-400 text-sm mt-2">At valuation</p>
+            <p className="text-th-secondary text-sm mt-2">At valuation</p>
           )}
         </div>
 
-        {/* Block 3: Quick risk/positive summary */}
-        <div className="bg-navy-card border border-gray-800 rounded-2xl p-5">
-          <p className="text-gray-400 text-xs uppercase tracking-wider mb-2">At a Glance</p>
+        <div className="bg-th-card border border-th-border rounded-2xl p-5">
+          <p className="text-th-secondary text-xs uppercase tracking-wider mb-2">At a Glance</p>
           <div className="space-y-1.5 text-xs">
             {result.red_flags.length > 0 && (
               <div className="flex items-center gap-2">
                 <span className="w-2 h-2 rounded-full bg-pe-red flex-shrink-0" />
-                <span className="text-gray-300">{result.red_flags.length} red flag{result.red_flags.length > 1 ? 's' : ''}</span>
+                <span className="text-th-body">{result.red_flags.length} red flag{result.red_flags.length > 1 ? 's' : ''}</span>
                 <span className="text-pe-red ml-auto">{fmt(result.red_flags.reduce((s, i) => s + i.impact, 0))}</span>
               </div>
             )}
             {result.warnings.length > 0 && (
               <div className="flex items-center gap-2">
                 <span className="w-2 h-2 rounded-full bg-gold flex-shrink-0" />
-                <span className="text-gray-300">{result.warnings.length} warning{result.warnings.length > 1 ? 's' : ''}</span>
+                <span className="text-th-body">{result.warnings.length} warning{result.warnings.length > 1 ? 's' : ''}</span>
                 <span className="text-gold ml-auto">{fmt(result.warnings.reduce((s, i) => s + i.impact, 0))}</span>
               </div>
             )}
             {result.positives.length > 0 && (
               <div className="flex items-center gap-2">
                 <span className="w-2 h-2 rounded-full bg-cyan flex-shrink-0" />
-                <span className="text-gray-300">{result.positives.length} positive{result.positives.length > 1 ? 's' : ''}</span>
+                <span className="text-th-body">{result.positives.length} positive{result.positives.length > 1 ? 's' : ''}</span>
                 <span className="text-cyan ml-auto">{fmt(result.positives.reduce((s, i) => s + i.impact, 0))}</span>
               </div>
             )}
@@ -437,9 +427,9 @@ export default function AnalysisResults({ result, property }: Props) {
 
       {/* Negotiation Playbook */}
       {neg && (
-        <div id="section-negotiation" className="bg-navy-card border border-cyan/20 rounded-2xl p-5">
+        <div id="section-negotiation" className="bg-th-card border border-cyan/20 rounded-2xl p-5">
           <div className="flex items-center justify-between mb-3">
-            <h3 className="text-white font-semibold text-sm">Negotiation Playbook</h3>
+            <h3 className="text-th-heading font-semibold text-sm">Negotiation Playbook</h3>
             <div className="flex items-center gap-2">
               <button
                 onClick={() => {
@@ -447,7 +437,7 @@ export default function AnalysisResults({ result, property }: Props) {
                   const text = `Suggested offer: ${fmt(neg.offer_low)} - ${fmt(neg.offer_high)}\nWalk away above: ${fmt(neg.walk_away)}\n\n${neg.reasoning}\n\n${points ? `Key talking points:\n${points}\n\n` : ''}Agent questions:\n${agentQuestions.map((q, i) => `${i + 1}. ${q}`).join('\n')}`;
                   copyText(text, 'summary');
                 }}
-                className="text-[11px] px-2 py-1 rounded border border-gray-700 text-gray-400 hover:text-cyan hover:border-cyan/50 transition-colors"
+                className="text-[11px] px-2 py-1 rounded border border-th-border text-th-secondary hover:text-cyan hover:border-cyan/50 transition-colors"
               >
                 {copiedBtn === 'summary' ? 'Copied!' : 'Copy summary'}
               </button>
@@ -456,7 +446,7 @@ export default function AnalysisResults({ result, property }: Props) {
                   const email = buildEmailDraft(property, result);
                   copyText(email, 'email');
                 }}
-                className="text-[11px] px-2 py-1 rounded border border-gray-700 text-gray-400 hover:text-cyan hover:border-cyan/50 transition-colors"
+                className="text-[11px] px-2 py-1 rounded border border-th-border text-th-secondary hover:text-cyan hover:border-cyan/50 transition-colors"
               >
                 {copiedBtn === 'email' ? 'Copied!' : 'Copy email to agent'}
               </button>
@@ -465,44 +455,42 @@ export default function AnalysisResults({ result, property }: Props) {
 
           <div className="grid grid-cols-3 gap-3 mb-4">
             <div className="text-center">
-              <p className="text-gray-500 text-[11px] uppercase">Open at</p>
+              <p className="text-th-muted text-[11px] uppercase">Open at</p>
               <p className="text-cyan font-bold text-lg">{fmt(neg.offer_low)}</p>
             </div>
             <div className="text-center">
-              <p className="text-gray-500 text-[11px] uppercase">Aim for</p>
-              <p className="text-white font-bold text-lg">{fmt(neg.offer_high)}</p>
+              <p className="text-th-muted text-[11px] uppercase">Aim for</p>
+              <p className="text-th-heading font-bold text-lg">{fmt(neg.offer_high)}</p>
             </div>
             <div className="text-center">
-              <p className="text-gray-500 text-[11px] uppercase">Walk away</p>
+              <p className="text-th-muted text-[11px] uppercase">Walk away</p>
               <p className="text-pe-red font-bold text-lg">{fmt(neg.walk_away)}</p>
             </div>
           </div>
 
-          <p className="text-gray-400 text-xs leading-relaxed mb-4">{neg.reasoning}</p>
+          <p className="text-th-secondary text-xs leading-relaxed mb-4">{neg.reasoning}</p>
 
-          {/* Top 3 negotiation talking points */}
           {neg.negotiation_points && neg.negotiation_points.length > 0 && (
-            <div className="border-t border-gray-800 pt-3 mb-4">
-              <p className="text-gray-400 text-xs uppercase tracking-wider mb-2 font-medium">Key talking points</p>
+            <div className="border-t border-th-border pt-3 mb-4">
+              <p className="text-th-secondary text-xs uppercase tracking-wider mb-2 font-medium">Key talking points</p>
               <div className="space-y-2">
                 {neg.negotiation_points.map((point, i) => (
-                  <div key={i} className="flex items-start gap-2 bg-navy-light/50 border border-cyan/10 rounded-lg p-2.5">
+                  <div key={i} className="flex items-start gap-2 bg-th-input/50 border border-cyan/10 rounded-lg p-2.5">
                     <span className="text-cyan font-bold text-xs mt-0.5 flex-shrink-0">{i + 1}.</span>
-                    <span className="text-gray-300 text-xs leading-relaxed">{point}</span>
+                    <span className="text-th-body text-xs leading-relaxed">{point}</span>
                   </div>
                 ))}
               </div>
             </div>
           )}
 
-          {/* Agent questions checklist */}
-          <div className="border-t border-gray-800 pt-3">
-            <p className="text-gray-400 text-xs uppercase tracking-wider mb-2 font-medium">Questions to ask the agent</p>
+          <div className="border-t border-th-border pt-3">
+            <p className="text-th-secondary text-xs uppercase tracking-wider mb-2 font-medium">Questions to ask the agent</p>
             <div className="space-y-1.5">
               {agentQuestions.map((q, i) => (
                 <div key={i} className="flex items-start gap-2">
                   <span className="text-cyan/50 text-xs mt-0.5 flex-shrink-0">{i + 1}.</span>
-                  <span className="text-gray-300 text-xs leading-relaxed">{q}</span>
+                  <span className="text-th-body text-xs leading-relaxed">{q}</span>
                 </div>
               ))}
             </div>
@@ -512,15 +500,15 @@ export default function AnalysisResults({ result, property }: Props) {
 
       {/* Comparables table */}
       {result.comparables && result.comparables.length > 0 && (
-        <div id="comps-table" className="bg-navy-card border border-gray-800 rounded-2xl p-5">
+        <div id="comps-table" className="bg-th-card border border-th-border rounded-2xl p-5">
           <button
             onClick={() => setShowComps(!showComps)}
             className="w-full flex items-center justify-between"
           >
             <div className="flex items-center gap-2">
-              <span className={`inline-block transition-transform text-xs text-gray-500 ${showComps ? 'rotate-90' : ''}`}>&#9654;</span>
-              <h3 className="text-white font-semibold text-sm">Comparable Sales</h3>
-              <span className="text-gray-500 text-xs">
+              <span className={`inline-block transition-transform text-xs text-th-muted ${showComps ? 'rotate-90' : ''}`}>&#9654;</span>
+              <h3 className="text-th-heading font-semibold text-sm">Comparable Sales</h3>
+              <span className="text-th-muted text-xs">
                 ({result.comparables.filter(c => !c.excluded).length} included
                 {result.comparables.some(c => c.excluded) && (
                   <>, {result.comparables.filter(c => c.excluded).length} excluded</>
@@ -533,41 +521,41 @@ export default function AnalysisResults({ result, property }: Props) {
         </div>
       )}
 
-      {/* Area data (EPC + Crime + Flood + HPI + Planning) */}
+      {/* Area data */}
       {result.area_data && (result.area_data.epcSummary || result.area_data.crimeRate || result.area_data.floodRisk || result.area_data.housePriceIndex || result.area_data.planning) && (
-        <div className="bg-navy-card border border-gray-800 rounded-2xl p-5">
-          <h3 className="text-white font-semibold text-sm mb-3">Area Intelligence</h3>
+        <div className="bg-th-card border border-th-border rounded-2xl p-5">
+          <h3 className="text-th-heading font-semibold text-sm mb-3">Area Intelligence</h3>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             {result.area_data.epcSummary && (
-              <div className="bg-navy-light/50 rounded-xl p-3">
+              <div className="bg-th-input/50 rounded-xl p-3">
                 <div className="flex items-center gap-2 mb-2">
                   <span className="w-2 h-2 rounded-full bg-gold flex-shrink-0" />
-                  <p className="text-gray-400 text-[10px] uppercase tracking-wider font-medium">EPC Register</p>
+                  <p className="text-th-secondary text-[10px] uppercase tracking-wider font-medium">EPC Register</p>
                 </div>
                 <div className="grid grid-cols-3 gap-2 text-center">
                   <div>
-                    <p className="text-white text-sm font-bold">{result.area_data.epcSummary.averageRating}</p>
-                    <p className="text-gray-500 text-[10px]">Avg rating</p>
+                    <p className="text-th-heading text-sm font-bold">{result.area_data.epcSummary.averageRating}</p>
+                    <p className="text-th-muted text-[10px]">Avg rating</p>
                   </div>
                   <div>
-                    <p className="text-white text-sm font-bold">{result.area_data.epcSummary.averageFloorArea}sqm</p>
-                    <p className="text-gray-500 text-[10px]">Avg floor area</p>
+                    <p className="text-th-heading text-sm font-bold">{result.area_data.epcSummary.averageFloorArea}sqm</p>
+                    <p className="text-th-muted text-[10px]">Avg floor area</p>
                   </div>
                   <div>
-                    <p className="text-white text-sm font-bold">{result.area_data.epcSummary.totalCerts}</p>
-                    <p className="text-gray-500 text-[10px]">Certificates</p>
+                    <p className="text-th-heading text-sm font-bold">{result.area_data.epcSummary.totalCerts}</p>
+                    <p className="text-th-muted text-[10px]">Certificates</p>
                   </div>
                 </div>
               </div>
             )}
             {result.area_data.crimeRate && (
-              <div className="bg-navy-light/50 rounded-xl p-3">
+              <div className="bg-th-input/50 rounded-xl p-3">
                 <div className="flex items-center gap-2 mb-2">
                   <span className={`w-2 h-2 rounded-full flex-shrink-0 ${
                     result.area_data.crimeRate.level === 'Low' ? 'bg-cyan' :
                     result.area_data.crimeRate.level === 'Average' ? 'bg-gold' : 'bg-pe-red'
                   }`} />
-                  <p className="text-gray-400 text-[10px] uppercase tracking-wider font-medium">Police UK</p>
+                  <p className="text-th-secondary text-[10px] uppercase tracking-wider font-medium">Police UK</p>
                 </div>
                 <div className="grid grid-cols-3 gap-2 text-center">
                   <div>
@@ -575,28 +563,28 @@ export default function AnalysisResults({ result, property }: Props) {
                       result.area_data.crimeRate.level === 'Low' ? 'text-cyan' :
                       result.area_data.crimeRate.level === 'Average' ? 'text-gold' : 'text-pe-red'
                     }`}>{result.area_data.crimeRate.level}</p>
-                    <p className="text-gray-500 text-[10px]">Crime level</p>
+                    <p className="text-th-muted text-[10px]">Crime level</p>
                   </div>
                   <div>
-                    <p className="text-white text-sm font-bold">{result.area_data.crimeRate.total}</p>
-                    <p className="text-gray-500 text-[10px]">Incidents/mo</p>
+                    <p className="text-th-heading text-sm font-bold">{result.area_data.crimeRate.total}</p>
+                    <p className="text-th-muted text-[10px]">Incidents/mo</p>
                   </div>
                   <div>
-                    <p className="text-white text-sm font-bold capitalize">{result.area_data.crimeRate.topCategory}</p>
-                    <p className="text-gray-500 text-[10px]">Top category</p>
+                    <p className="text-th-heading text-sm font-bold capitalize">{result.area_data.crimeRate.topCategory}</p>
+                    <p className="text-th-muted text-[10px]">Top category</p>
                   </div>
                 </div>
               </div>
             )}
             {result.area_data.floodRisk && (
-              <div className="bg-navy-light/50 rounded-xl p-3">
+              <div className="bg-th-input/50 rounded-xl p-3">
                 <div className="flex items-center gap-2 mb-2">
                   <span className={`w-2 h-2 rounded-full flex-shrink-0 ${
                     result.area_data.floodRisk.riskLevel === 'Very Low' ? 'bg-cyan' :
                     result.area_data.floodRisk.riskLevel === 'Low' ? 'bg-cyan' :
                     result.area_data.floodRisk.riskLevel === 'Medium' ? 'bg-gold' : 'bg-pe-red'
                   }`} />
-                  <p className="text-gray-400 text-[10px] uppercase tracking-wider font-medium">Environment Agency</p>
+                  <p className="text-th-secondary text-[10px] uppercase tracking-wider font-medium">Environment Agency</p>
                 </div>
                 <div className="grid grid-cols-3 gap-2 text-center">
                   <div>
@@ -604,94 +592,94 @@ export default function AnalysisResults({ result, property }: Props) {
                       result.area_data.floodRisk.riskLevel === 'Very Low' || result.area_data.floodRisk.riskLevel === 'Low' ? 'text-cyan' :
                       result.area_data.floodRisk.riskLevel === 'Medium' ? 'text-gold' : 'text-pe-red'
                     }`}>{result.area_data.floodRisk.riskLevel}</p>
-                    <p className="text-gray-500 text-[10px]">Flood risk</p>
+                    <p className="text-th-muted text-[10px]">Flood risk</p>
                   </div>
                   <div>
                     <p className={`text-sm font-bold ${
-                      result.area_data.floodRisk.activeWarnings === 0 ? 'text-white' : 'text-pe-red'
+                      result.area_data.floodRisk.activeWarnings === 0 ? 'text-th-heading' : 'text-pe-red'
                     }`}>{result.area_data.floodRisk.activeWarnings}</p>
-                    <p className="text-gray-500 text-[10px]">Active warnings</p>
+                    <p className="text-th-muted text-[10px]">Active warnings</p>
                   </div>
                   <div>
-                    <p className="text-white text-sm font-bold truncate" title={result.area_data.floodRisk.nearestStation}>
+                    <p className="text-th-heading text-sm font-bold truncate" title={result.area_data.floodRisk.nearestStation}>
                       {result.area_data.floodRisk.nearestStation || 'None'}
                     </p>
-                    <p className="text-gray-500 text-[10px]">Nearest station</p>
+                    <p className="text-th-muted text-[10px]">Nearest station</p>
                   </div>
                 </div>
-                <p className="text-gray-500 text-[10px] mt-2 leading-relaxed">{result.area_data.floodRisk.description}</p>
+                <p className="text-th-muted text-[10px] mt-2 leading-relaxed">{result.area_data.floodRisk.description}</p>
               </div>
             )}
             {result.area_data.housePriceIndex && (
-              <div className="bg-navy-light/50 rounded-xl p-3">
+              <div className="bg-th-input/50 rounded-xl p-3">
                 <div className="flex items-center gap-2 mb-2">
                   <span className={`w-2 h-2 rounded-full flex-shrink-0 ${
                     result.area_data.housePriceIndex.annualChange > 2 ? 'bg-cyan' :
                     result.area_data.housePriceIndex.annualChange >= 0 ? 'bg-gold' : 'bg-pe-red'
                   }`} />
-                  <p className="text-gray-400 text-[10px] uppercase tracking-wider font-medium">UK House Price Index</p>
-                  <span className="text-gray-600 text-[9px] ml-auto">{result.area_data.housePriceIndex.period}</span>
+                  <p className="text-th-secondary text-[10px] uppercase tracking-wider font-medium">UK House Price Index</p>
+                  <span className="text-th-faint text-[9px] ml-auto">{result.area_data.housePriceIndex.period}</span>
                 </div>
                 <div className="grid grid-cols-3 gap-2 text-center">
                   <div>
-                    <p className="text-white text-sm font-bold">£{result.area_data.housePriceIndex.averagePrice.toLocaleString()}</p>
-                    <p className="text-gray-500 text-[10px]">Avg price ({result.area_data.housePriceIndex.region})</p>
+                    <p className="text-th-heading text-sm font-bold">£{result.area_data.housePriceIndex.averagePrice.toLocaleString()}</p>
+                    <p className="text-th-muted text-[10px]">Avg price ({result.area_data.housePriceIndex.region})</p>
                   </div>
                   <div>
                     <p className={`text-sm font-bold ${
                       result.area_data.housePriceIndex.annualChange > 0 ? 'text-cyan' :
                       result.area_data.housePriceIndex.annualChange === 0 ? 'text-gold' : 'text-pe-red'
                     }`}>{result.area_data.housePriceIndex.annualChange > 0 ? '+' : ''}{result.area_data.housePriceIndex.annualChange}%</p>
-                    <p className="text-gray-500 text-[10px]">Annual change</p>
+                    <p className="text-th-muted text-[10px]">Annual change</p>
                   </div>
                   <div>
                     <p className={`text-sm font-bold ${
                       result.area_data.housePriceIndex.monthlyChange > 0 ? 'text-cyan' :
                       result.area_data.housePriceIndex.monthlyChange === 0 ? 'text-gold' : 'text-pe-red'
                     }`}>{result.area_data.housePriceIndex.monthlyChange > 0 ? '+' : ''}{result.area_data.housePriceIndex.monthlyChange}%</p>
-                    <p className="text-gray-500 text-[10px]">Monthly change</p>
+                    <p className="text-th-muted text-[10px]">Monthly change</p>
                   </div>
                 </div>
                 {result.area_data.housePriceIndex.salesVolume && (
-                  <p className="text-gray-500 text-[10px] mt-2 text-center">{result.area_data.housePriceIndex.salesVolume.toLocaleString()} transactions recorded</p>
+                  <p className="text-th-muted text-[10px] mt-2 text-center">{result.area_data.housePriceIndex.salesVolume.toLocaleString()} transactions recorded</p>
                 )}
               </div>
             )}
             {result.area_data.planning && (
-              <div className="bg-navy-light/50 rounded-xl p-3">
+              <div className="bg-th-input/50 rounded-xl p-3">
                 <div className="flex items-center gap-2 mb-2">
                   <span className={`w-2 h-2 rounded-full flex-shrink-0 ${
                     result.area_data.planning.largeDevelopments > 2 ? 'bg-gold' : 'bg-cyan'
                   }`} />
-                  <p className="text-gray-400 text-[10px] uppercase tracking-wider font-medium">Planning Applications</p>
+                  <p className="text-th-secondary text-[10px] uppercase tracking-wider font-medium">Planning Applications</p>
                 </div>
                 <div className="grid grid-cols-3 gap-2 text-center mb-2">
                   <div>
-                    <p className="text-white text-sm font-bold">{result.area_data.planning.total}</p>
-                    <p className="text-gray-500 text-[10px]">Total apps</p>
+                    <p className="text-th-heading text-sm font-bold">{result.area_data.planning.total}</p>
+                    <p className="text-th-muted text-[10px]">Total apps</p>
                   </div>
                   <div>
                     <p className={`text-sm font-bold ${
-                      result.area_data.planning.largeDevelopments > 0 ? 'text-gold' : 'text-white'
+                      result.area_data.planning.largeDevelopments > 0 ? 'text-gold' : 'text-th-heading'
                     }`}>{result.area_data.planning.largeDevelopments}</p>
-                    <p className="text-gray-500 text-[10px]">Large/major</p>
+                    <p className="text-th-muted text-[10px]">Large/major</p>
                   </div>
                   <div>
-                    <p className="text-white text-sm font-bold">{result.area_data.planning.recent.length}</p>
-                    <p className="text-gray-500 text-[10px]">Recent</p>
+                    <p className="text-th-heading text-sm font-bold">{result.area_data.planning.recent.length}</p>
+                    <p className="text-th-muted text-[10px]">Recent</p>
                   </div>
                 </div>
                 {result.area_data.planning.recent.length > 0 && (
-                  <div className="space-y-1 mt-2 border-t border-gray-800 pt-2">
+                  <div className="space-y-1 mt-2 border-t border-th-border pt-2">
                     {result.area_data.planning.recent.slice(0, 3).map((app, i) => (
                       <div key={i} className="flex items-start gap-1.5">
                         <span className={`mt-1 w-1.5 h-1.5 rounded-full flex-shrink-0 ${
                           app.status.toLowerCase().includes('approved') || app.status.toLowerCase().includes('permitted') ? 'bg-cyan' :
                           app.status.toLowerCase().includes('refused') || app.status.toLowerCase().includes('rejected') ? 'bg-pe-red' : 'bg-gold'
                         }`} />
-                        <p className="text-gray-400 text-[10px] leading-relaxed truncate" title={app.description}>
+                        <p className="text-th-secondary text-[10px] leading-relaxed truncate" title={app.description}>
                           {app.description}
-                          <span className="text-gray-600 ml-1">({app.status})</span>
+                          <span className="text-th-faint ml-1">({app.status})</span>
                         </p>
                       </div>
                     ))}
@@ -707,37 +695,35 @@ export default function AnalysisResults({ result, property }: Props) {
       {result.data_sources && result.data_sources.length > 0 && (
         <div className="flex flex-wrap justify-center gap-2 px-4">
           {result.data_sources.map((src, i) => (
-            <span key={i} className="text-[10px] px-2 py-0.5 rounded-full border border-gray-800 text-gray-500 bg-navy-card/30">
+            <span key={i} className="text-[10px] px-2 py-0.5 rounded-full border border-th-border text-th-muted bg-th-card/30">
               {src}
             </span>
           ))}
         </div>
       )}
 
-      {/* How valuation was calculated — collapsible */}
-      <div className="bg-navy-card border border-gray-800 rounded-2xl p-5">
+      {/* How valuation was calculated */}
+      <div className="bg-th-card border border-th-border rounded-2xl p-5">
         <button
           onClick={() => setShowMethodology(!showMethodology)}
           className="w-full flex items-center justify-between"
         >
           <div className="flex items-center gap-2">
-            <span className={`inline-block transition-transform text-xs text-gray-500 ${showMethodology ? 'rotate-90' : ''}`}>&#9654;</span>
-            <h3 className="text-white font-semibold text-sm">How valuation was calculated</h3>
+            <span className={`inline-block transition-transform text-xs text-th-muted ${showMethodology ? 'rotate-90' : ''}`}>&#9654;</span>
+            <h3 className="text-th-heading font-semibold text-sm">How valuation was calculated</h3>
           </div>
         </button>
 
         {showMethodology && (
           <div className="mt-3 space-y-3">
-            {/* Basis text */}
             {result.valuation.basis && (
-              <p className="text-gray-400 text-xs leading-relaxed">{result.valuation.basis}</p>
+              <p className="text-th-secondary text-xs leading-relaxed">{result.valuation.basis}</p>
             )}
 
-            {/* Comps used summary */}
             {result.comparables && result.comparables.length > 0 && (
               <div>
-                <p className="text-gray-500 text-[10px] uppercase tracking-wider mb-1 font-medium">Comparables used</p>
-                <p className="text-gray-400 text-xs">
+                <p className="text-th-muted text-[10px] uppercase tracking-wider mb-1 font-medium">Comparables used</p>
+                <p className="text-th-secondary text-xs">
                   {result.comparables.filter(c => !c.excluded).length} sales included in valuation
                   {result.comparables.some(c => c.excluded) && (
                     <>, {result.comparables.filter(c => c.excluded).length} excluded as outliers</>
@@ -746,14 +732,13 @@ export default function AnalysisResults({ result, property }: Props) {
               </div>
             )}
 
-            {/* Confidence drivers */}
             {result.valuation.confidence_drivers && result.valuation.confidence_drivers.length > 0 && (
               <div>
-                <p className="text-gray-500 text-[10px] uppercase tracking-wider mb-1 font-medium">Confidence factors</p>
+                <p className="text-th-muted text-[10px] uppercase tracking-wider mb-1 font-medium">Confidence factors</p>
                 <ul className="space-y-1">
                   {result.valuation.confidence_drivers.map((d, i) => (
-                    <li key={i} className="text-gray-400 text-xs flex items-start gap-1.5">
-                      <span className="w-1 h-1 rounded-full bg-gray-500 mt-1.5 flex-shrink-0" />
+                    <li key={i} className="text-th-secondary text-xs flex items-start gap-1.5">
+                      <span className="w-1 h-1 rounded-full bg-th-muted mt-1.5 flex-shrink-0" />
                       {d}
                     </li>
                   ))}
@@ -761,20 +746,19 @@ export default function AnalysisResults({ result, property }: Props) {
               </div>
             )}
 
-            {/* Adjustments applied */}
             <div>
-              <p className="text-gray-500 text-[10px] uppercase tracking-wider mb-1 font-medium">Adjustments considered</p>
-              <ul className="space-y-1 text-gray-400 text-xs">
+              <p className="text-th-muted text-[10px] uppercase tracking-wider mb-1 font-medium">Adjustments considered</p>
+              <ul className="space-y-1 text-th-secondary text-xs">
                 <li className="flex items-start gap-1.5">
-                  <span className="w-1 h-1 rounded-full bg-gray-500 mt-1.5 flex-shrink-0" />
+                  <span className="w-1 h-1 rounded-full bg-th-muted mt-1.5 flex-shrink-0" />
                   Property type: {property.propertyType}, {property.bedrooms} bed, {property.sizeSqm}sqm
                 </li>
                 <li className="flex items-start gap-1.5">
-                  <span className="w-1 h-1 rounded-full bg-gray-500 mt-1.5 flex-shrink-0" />
+                  <span className="w-1 h-1 rounded-full bg-th-muted mt-1.5 flex-shrink-0" />
                   Year built: {property.yearBuilt} ({new Date().getFullYear() - property.yearBuilt} years old)
                 </li>
                 <li className="flex items-start gap-1.5">
-                  <span className="w-1 h-1 rounded-full bg-gray-500 mt-1.5 flex-shrink-0" />
+                  <span className="w-1 h-1 rounded-full bg-th-muted mt-1.5 flex-shrink-0" />
                   Tenure: {property.tenure}
                   {property.tenure === 'leasehold' && property.leaseYears ? ` (${property.leaseYears} years remaining)` : ''}
                 </li>
@@ -785,7 +769,7 @@ export default function AnalysisResults({ result, property }: Props) {
       </div>
 
       {/* Collapsible detail sections */}
-      <div id="section-risks" className="bg-navy-card border border-gray-800 rounded-2xl p-5 space-y-1">
+      <div id="section-risks" className="bg-th-card border border-th-border rounded-2xl p-5 space-y-1">
         {result.red_flags.length > 0 && (
           <CollapsibleSection title="Red Flags" items={result.red_flags} color="red" />
         )}
@@ -798,7 +782,7 @@ export default function AnalysisResults({ result, property }: Props) {
       </div>
 
       {/* Disclaimer */}
-      <p className="text-gray-600 text-[10px] text-center leading-relaxed px-4">
+      <p className="text-th-faint text-[10px] text-center leading-relaxed px-4">
         Guidance only — not a formal valuation. Verify with a RICS surveyor or qualified agent before making offers.
       </p>
     </div>

@@ -6,8 +6,10 @@ import PropertyForm from './components/PropertyForm';
 import AnalysisResults from './components/AnalysisResults';
 import LoadingState from './components/LoadingState';
 import { PropertyInput, AnalysisResult } from './types/property';
+import { useTheme } from './hooks/useTheme';
 
 export default function App() {
+  const { isDark, toggle: toggleTheme } = useTheme();
   const [isLoading, setIsLoading] = useState(false);
   const [result, setResult] = useState<AnalysisResult | null>(null);
   const [lastProperty, setLastProperty] = useState<PropertyInput | null>(null);
@@ -134,18 +136,21 @@ export default function App() {
   const showHero = !result && !isLoading;
 
   return (
-    <div className="min-h-screen bg-navy">
-      <div className="fixed inset-0 pointer-events-none">
-        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[800px] h-[600px] bg-cyan/5 rounded-full blur-[120px]" />
-        <div className="absolute bottom-0 right-0 w-[400px] h-[400px] bg-gold/5 rounded-full blur-[100px]" />
-      </div>
+    <div className="min-h-screen bg-th-page transition-colors duration-300">
+      {/* Decorative glow — only in dark mode */}
+      {isDark && (
+        <div className="fixed inset-0 pointer-events-none">
+          <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[800px] h-[600px] bg-cyan/5 rounded-full blur-[120px]" />
+          <div className="absolute bottom-0 right-0 w-[400px] h-[400px] bg-gold/5 rounded-full blur-[100px]" />
+        </div>
+      )}
 
       <div className="relative z-10 pb-16">
-        <Header onReset={handleReset} />
+        <Header onReset={handleReset} isDark={isDark} onToggleTheme={toggleTheme} />
 
         <div className="max-w-4xl mx-auto px-4 mb-2 flex justify-end items-center gap-2">
           {demoMode && !apiKeyConfigured && (
-            <span className="text-gray-500 text-xs">No API key &mdash; using sample data</span>
+            <span className="text-th-muted text-xs">No API key &mdash; using sample data</span>
           )}
           <button
             onClick={() => {
@@ -158,7 +163,7 @@ export default function App() {
             className={`text-xs px-3 py-1.5 rounded-full border transition-all ${
               demoMode
                 ? 'border-gold bg-gold/10 text-gold'
-                : 'border-gray-700 text-gray-500 hover:border-gray-500'
+                : 'border-th-border text-th-muted hover:border-th-muted'
             }`}
           >
             {demoMode ? 'Try a demo' : 'Live Mode'}
@@ -214,7 +219,7 @@ export default function App() {
               <div className="w-full max-w-4xl mx-auto mt-6 text-center">
                 <button
                   onClick={handleReset}
-                  className="px-6 py-2.5 rounded-xl border border-gray-700 text-gray-400 hover:text-cyan hover:border-cyan/50 transition-all text-sm"
+                  className="px-6 py-2.5 rounded-xl border border-th-border text-th-secondary hover:text-cyan hover:border-cyan/50 transition-all text-sm"
                 >
                   Analyse another property
                 </button>
