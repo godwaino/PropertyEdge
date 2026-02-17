@@ -54,6 +54,21 @@ export interface HousePriceIndexData {
   salesVolume?: number;
   region: string;
   period: string;
+  // Property type breakdown
+  averagePriceDetached?: number;
+  averagePriceSemiDetached?: number;
+  averagePriceTerraced?: number;
+  averagePriceFlat?: number;
+  // Buyer type breakdown
+  averagePriceFTB?: number;
+  averagePriceFormerOwner?: number;
+  annualChangeFTB?: number;
+  // Build status
+  averagePriceNewBuild?: number;
+  averagePriceExisting?: number;
+  // Affordability (ONS NOMIS ASHE)
+  affordabilityRatio?: number;
+  medianEarnings?: number;
 }
 
 export interface PlanningApplication {

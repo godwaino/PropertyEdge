@@ -159,6 +159,21 @@ interface HousePriceIndexData {
   salesVolume?: number;
   region: string;
   period: string;              // e.g. "2024-09"
+  // Property type breakdown
+  averagePriceDetached?: number;
+  averagePriceSemiDetached?: number;
+  averagePriceTerraced?: number;
+  averagePriceFlat?: number;
+  // Buyer type breakdown
+  averagePriceFTB?: number;          // first-time buyers
+  averagePriceFormerOwner?: number;  // former owner-occupiers
+  annualChangeFTB?: number;          // % annual change for FTBs
+  // Build status
+  averagePriceNewBuild?: number;
+  averagePriceExisting?: number;
+  // Affordability (computed from NOMIS earnings + HPI price)
+  affordabilityRatio?: number;       // price-to-earnings ratio
+  medianEarnings?: number;           // annual median earnings (NOMIS ASHE)
 }
 
 interface PlanningApplication {
@@ -194,14 +209,18 @@ function haversineDistance(lat1: number, lon1: number, lat2: number, lon2: numbe
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 }
 
-// Look up lat/lng for a postcode via postcodes.io
-async function getPostcodeLocation(postcode: string): Promise<{ lat: number; lng: number } | null> {
+// Look up lat/lng and admin district for a postcode via postcodes.io
+async function getPostcodeLocation(postcode: string): Promise<{ lat: number; lng: number; adminDistrict?: string } | null> {
   try {
     const encoded = encodeURIComponent(postcode.trim());
     const res = await fetch(`https://api.postcodes.io/postcodes/${encoded}`, { signal: AbortSignal.timeout(3000) });
     const data = await res.json() as any;
     if (data.status === 200 && data.result) {
-      return { lat: data.result.latitude, lng: data.result.longitude };
+      return {
+        lat: data.result.latitude,
+        lng: data.result.longitude,
+        adminDistrict: data.result.admin_district || undefined,
+      };
     }
   } catch {}
   return null;
@@ -422,20 +441,50 @@ async function fetchHousePriceIndex(postcode: string): Promise<HousePriceIndexDa
         if (!items || items.length === 0) continue;
 
         const latest = items[0];
-        const avgPrice = latest['averagePrice'] || latest['http://landregistry.data.gov.uk/def/ukhpi/averagePrice'];
-        const annualChange = latest['percentageAnnualChange'] || latest['http://landregistry.data.gov.uk/def/ukhpi/percentageAnnualChange'];
-        const monthlyChange = latest['percentageChange'] || latest['http://landregistry.data.gov.uk/def/ukhpi/percentageChange'];
-        const salesVolume = latest['salesVolume'] || latest['http://landregistry.data.gov.uk/def/ukhpi/salesVolume'];
-        const refMonth = latest['refMonth'] || latest['http://landregistry.data.gov.uk/def/ukhpi/refMonth'] || '';
+        const hpiPrefix = 'http://landregistry.data.gov.uk/def/ukhpi/';
+        const hpiVal = (key: string) => latest[key] ?? latest[`${hpiPrefix}${key}`];
+
+        const avgPrice = hpiVal('averagePrice');
+        const annualChange = hpiVal('percentageAnnualChange');
+        const monthlyChange = hpiVal('percentageChange');
+        const salesVolume = hpiVal('salesVolume');
+        const refMonth = hpiVal('refMonth') || '';
+
+        // Property type breakdown
+        const avgDetached = hpiVal('averagePriceDetached');
+        const avgSemiDetached = hpiVal('averagePriceSemiDetached');
+        const avgTerraced = hpiVal('averagePriceTerraced');
+        const avgFlat = hpiVal('averagePriceFlatMaisonette');
+
+        // Buyer type breakdown
+        const avgFTB = hpiVal('averagePriceFirstTimeBuyer');
+        const avgFormerOwner = hpiVal('averagePriceFormerOwnerOccupier');
+        const annualChangeFTB = hpiVal('percentageAnnualChangeFirstTimeBuyer');
+
+        // Build status
+        const avgNewBuild = hpiVal('averagePriceNewBuild');
+        const avgExisting = hpiVal('averagePriceExistingProperty');
+
+        const roundPrice = (v: any) => v ? Math.round(typeof v === 'number' ? v : parseFloat(v)) : undefined;
+        const roundPct = (v: any) => v != null ? (typeof v === 'number' ? Math.round(v * 10) / 10 : parseFloat(v) || 0) : undefined;
 
         if (avgPrice) {
           return {
-            averagePrice: Math.round(typeof avgPrice === 'number' ? avgPrice : parseFloat(avgPrice)),
-            annualChange: typeof annualChange === 'number' ? Math.round(annualChange * 10) / 10 : parseFloat(annualChange) || 0,
-            monthlyChange: typeof monthlyChange === 'number' ? Math.round(monthlyChange * 10) / 10 : parseFloat(monthlyChange) || 0,
-            salesVolume: salesVolume ? Math.round(typeof salesVolume === 'number' ? salesVolume : parseFloat(salesVolume)) : undefined,
+            averagePrice: roundPrice(avgPrice)!,
+            annualChange: roundPct(annualChange) ?? 0,
+            monthlyChange: roundPct(monthlyChange) ?? 0,
+            salesVolume: roundPrice(salesVolume),
             region,
             period: typeof refMonth === 'string' ? refMonth.substring(0, 7) : String(refMonth).substring(0, 7),
+            averagePriceDetached: roundPrice(avgDetached),
+            averagePriceSemiDetached: roundPrice(avgSemiDetached),
+            averagePriceTerraced: roundPrice(avgTerraced),
+            averagePriceFlat: roundPrice(avgFlat),
+            averagePriceFTB: roundPrice(avgFTB),
+            averagePriceFormerOwner: roundPrice(avgFormerOwner),
+            annualChangeFTB: roundPct(annualChangeFTB),
+            averagePriceNewBuild: roundPrice(avgNewBuild),
+            averagePriceExisting: roundPrice(avgExisting),
           };
         }
       } catch {
@@ -444,6 +493,40 @@ async function fetchHousePriceIndex(postcode: string): Promise<HousePriceIndexDa
     }
   } catch (err: any) {
     console.error('UK HPI API failed:', err?.message);
+  }
+  return undefined;
+}
+
+// Fetch median annual earnings from NOMIS ASHE (Annual Survey of Hours and Earnings)
+// Uses workplace-based analysis by local authority district
+async function fetchMedianEarnings(adminDistrict: string): Promise<number | undefined> {
+  try {
+    // NOMIS uses GSS geography codes; we need to resolve the district name to a code first
+    // Search NOMIS for the local authority by name
+    const encoded = encodeURIComponent(adminDistrict.trim());
+    const searchRes = await fetch(
+      `https://www.nomisweb.co.uk/api/v01/dataset/NM_30_1.data.json?geography=TYPE464&date=latest&sex=7&pay=1&measures=20100&select=geography_name,geography_code,obs_value&search=geography_name:*${encoded}*`,
+      { signal: AbortSignal.timeout(6000) }
+    );
+    if (!searchRes.ok) return undefined;
+
+    const data = await searchRes.json() as any;
+    const obs = data?.obs;
+    if (!obs || obs.length === 0) return undefined;
+
+    // Find best match for the district name (case-insensitive)
+    const target = adminDistrict.toLowerCase();
+    const match = obs.find((o: any) =>
+      o.geography_name?.toLowerCase() === target
+    ) || obs[0];
+
+    const val = parseFloat(match?.obs_value);
+    if (isNaN(val) || val <= 0) return undefined;
+
+    // ASHE pay=1 is gross weekly pay; convert to annual (×52)
+    return Math.round(val * 52);
+  } catch (err: any) {
+    console.error('NOMIS ASHE API failed:', err?.message);
   }
   return undefined;
 }
@@ -1045,11 +1128,12 @@ app.post('/api/analyze', rateLimit, async (req, res) => {
       }));
     }
 
-    // Fetch crime, flood, HPI, and planning data in parallel (non-blocking)
+    // Fetch crime, flood, HPI, planning, and earnings data in parallel (non-blocking)
     let crimeData: AreaData['crimeRate'] | undefined;
     let floodData: FloodRiskData | undefined;
     let hpiData: HousePriceIndexData | undefined;
     let planningData: PlanningData | undefined;
+    let medianEarnings: number | undefined;
 
     const parallelFetches: Promise<any>[] = [
       fetchHousePriceIndex(property.postcode).then(r => { hpiData = r; }),
@@ -1060,8 +1144,20 @@ app.post('/api/analyze', rateLimit, async (req, res) => {
         fetchCrimeData(subjectLocation.lat, subjectLocation.lng).then(r => { crimeData = r; }),
         fetchFloodRisk(subjectLocation.lat, subjectLocation.lng).then(r => { floodData = r; }),
       );
+      if (subjectLocation.adminDistrict) {
+        parallelFetches.push(
+          fetchMedianEarnings(subjectLocation.adminDistrict).then(r => { medianEarnings = r; }),
+        );
+      }
     }
     await Promise.all(parallelFetches);
+
+    // Enrich HPI with affordability ratio from NOMIS earnings
+    if (hpiData && medianEarnings && medianEarnings > 0) {
+      hpiData.medianEarnings = medianEarnings;
+      hpiData.affordabilityRatio = Math.round((hpiData.averagePrice / medianEarnings) * 10) / 10;
+      dataSources.push('ONS (NOMIS ASHE)');
+    }
 
     if (crimeData) dataSources.push('Police UK');
     if (floodData) dataSources.push('Environment Agency');
@@ -1125,12 +1221,12 @@ Property Details:
 - Year Built: ${property.yearBuilt}
 - Tenure: ${property.tenure}${leaseholdInfo}
 ${comparablesText}
-${areaData.epcSummary ? `\nAREA EPC DATA (Energy Performance Certificates):\n- Average energy rating: ${areaData.epcSummary.averageRating}\n- Average floor area: ${areaData.epcSummary.averageFloorArea}sqm\n- ${areaData.epcSummary.totalCerts} certificates in this postcode\n` : ''}${areaData.crimeRate ? `\nAREA CRIME DATA (Police UK):\n- ${areaData.crimeRate.total} crimes reported nearby (last month)\n- Most common: ${areaData.crimeRate.topCategory}\n- Crime level: ${areaData.crimeRate.level}\n` : ''}${areaData.floodRisk ? `\nFLOOD RISK DATA (Environment Agency):\n- Flood risk level: ${areaData.floodRisk.riskLevel}\n- Active warnings within 5km: ${areaData.floodRisk.activeWarnings}\n- ${areaData.floodRisk.description}${areaData.floodRisk.nearestStation ? `\n- Nearest monitoring station: ${areaData.floodRisk.nearestStation}` : ''}\nNote: If flood risk is Medium or High, this MUST appear in red_flags or warnings with estimated insurance/remediation cost impact.\n` : ''}${areaData.housePriceIndex ? `\nUK HOUSE PRICE INDEX (HM Land Registry):
+${areaData.epcSummary ? `\nAREA EPC DATA (Energy Performance Certificates):\n- Average energy rating: ${areaData.epcSummary.averageRating}\n- Average floor area: ${areaData.epcSummary.averageFloorArea}sqm\n- ${areaData.epcSummary.totalCerts} certificates in this postcode\n` : ''}${areaData.crimeRate ? `\nAREA CRIME DATA (Police UK):\n- ${areaData.crimeRate.total} crimes reported nearby (last month)\n- Most common: ${areaData.crimeRate.topCategory}\n- Crime level: ${areaData.crimeRate.level}\n` : ''}${areaData.floodRisk ? `\nFLOOD RISK DATA (Environment Agency):\n- Flood risk level: ${areaData.floodRisk.riskLevel}\n- Active warnings within 5km: ${areaData.floodRisk.activeWarnings}\n- ${areaData.floodRisk.description}${areaData.floodRisk.nearestStation ? `\n- Nearest monitoring station: ${areaData.floodRisk.nearestStation}` : ''}\nNote: If flood risk is Medium or High, this MUST appear in red_flags or warnings with estimated insurance/remediation cost impact.\n` : ''}${areaData.housePriceIndex ? `\nUK HOUSE PRICE INDEX (HM Land Registry + ONS):
 - Region: ${areaData.housePriceIndex.region}
 - Average price: £${areaData.housePriceIndex.averagePrice.toLocaleString()} (${areaData.housePriceIndex.period})
 - Annual change: ${areaData.housePriceIndex.annualChange > 0 ? '+' : ''}${areaData.housePriceIndex.annualChange}%
-- Monthly change: ${areaData.housePriceIndex.monthlyChange > 0 ? '+' : ''}${areaData.housePriceIndex.monthlyChange}%${areaData.housePriceIndex.salesVolume ? `\n- Sales volume: ${areaData.housePriceIndex.salesVolume} transactions` : ''}
-Use this to contextualise whether the local market is rising, flat or falling. Factor market trends into your valuation confidence.\n` : ''}${areaData.planning ? `\nPLANNING APPLICATIONS (PlanIt):
+- Monthly change: ${areaData.housePriceIndex.monthlyChange > 0 ? '+' : ''}${areaData.housePriceIndex.monthlyChange}%${areaData.housePriceIndex.salesVolume ? `\n- Sales volume: ${areaData.housePriceIndex.salesVolume} transactions` : ''}${areaData.housePriceIndex.averagePriceDetached ? `\n- By type: Detached £${areaData.housePriceIndex.averagePriceDetached.toLocaleString()}` : ''}${areaData.housePriceIndex.averagePriceSemiDetached ? ` | Semi £${areaData.housePriceIndex.averagePriceSemiDetached.toLocaleString()}` : ''}${areaData.housePriceIndex.averagePriceTerraced ? ` | Terraced £${areaData.housePriceIndex.averagePriceTerraced.toLocaleString()}` : ''}${areaData.housePriceIndex.averagePriceFlat ? ` | Flat £${areaData.housePriceIndex.averagePriceFlat.toLocaleString()}` : ''}${areaData.housePriceIndex.averagePriceFTB ? `\n- First-time buyer avg: £${areaData.housePriceIndex.averagePriceFTB.toLocaleString()}${areaData.housePriceIndex.annualChangeFTB != null ? ` (${areaData.housePriceIndex.annualChangeFTB > 0 ? '+' : ''}${areaData.housePriceIndex.annualChangeFTB}% annual)` : ''}` : ''}${areaData.housePriceIndex.averagePriceFormerOwner ? `\n- Former owner-occupier avg: £${areaData.housePriceIndex.averagePriceFormerOwner.toLocaleString()}` : ''}${areaData.housePriceIndex.averagePriceNewBuild ? `\n- New build avg: £${areaData.housePriceIndex.averagePriceNewBuild.toLocaleString()} | Existing avg: £${(areaData.housePriceIndex.averagePriceExisting || 0).toLocaleString()}` : ''}${areaData.housePriceIndex.affordabilityRatio ? `\n- Affordability ratio: ${areaData.housePriceIndex.affordabilityRatio}x median earnings (£${(areaData.housePriceIndex.medianEarnings || 0).toLocaleString()}/yr, ONS ASHE)` : ''}
+Use this to contextualise whether the local market is rising, flat or falling. Factor market trends, property type benchmarks, and affordability into your valuation confidence.\n` : ''}${areaData.planning ? `\nPLANNING APPLICATIONS (PlanIt):
 - ${areaData.planning.total} planning applications near this postcode
 - ${areaData.planning.largeDevelopments} large/major developments
 - Recent applications:
@@ -1341,11 +1437,12 @@ app.post('/api/demo', rateLimit, async (req, res) => {
     distance: Math.round((0.1 + (i * 0.15) % 1.5) * 10) / 10,
   }));
 
-  // Crime, Flood, HPI, and Planning data in parallel
+  // Crime, Flood, HPI, Planning, and Earnings data in parallel
   let crimeDataDemo: AreaData['crimeRate'] | undefined;
   let floodDataDemo: FloodRiskData | undefined;
   let hpiDataDemo: HousePriceIndexData | undefined;
   let planningDataDemo: PlanningData | undefined;
+  let medianEarningsDemo: number | undefined;
 
   const demoParallelFetches: Promise<any>[] = [
     fetchHousePriceIndex(property.postcode || '').then(r => { hpiDataDemo = r; }),
@@ -1356,8 +1453,20 @@ app.post('/api/demo', rateLimit, async (req, res) => {
       fetchCrimeData(locationDemo.lat, locationDemo.lng).then(r => { crimeDataDemo = r; }),
       fetchFloodRisk(locationDemo.lat, locationDemo.lng).then(r => { floodDataDemo = r; }),
     );
+    if (locationDemo.adminDistrict) {
+      demoParallelFetches.push(
+        fetchMedianEarnings(locationDemo.adminDistrict).then(r => { medianEarningsDemo = r; }),
+      );
+    }
   }
   await Promise.all(demoParallelFetches);
+
+  // Enrich HPI with affordability ratio from NOMIS earnings
+  if (hpiDataDemo && medianEarningsDemo && medianEarningsDemo > 0) {
+    hpiDataDemo.medianEarnings = medianEarningsDemo;
+    hpiDataDemo.affordabilityRatio = Math.round((hpiDataDemo.averagePrice / medianEarningsDemo) * 10) / 10;
+    dataSources.push('ONS (NOMIS ASHE)');
+  }
 
   if (crimeDataDemo) dataSources.push('Police UK');
   if (floodDataDemo) dataSources.push('Environment Agency');

@@ -610,41 +610,93 @@ export default function AnalysisResults({ result, property }: Props) {
                 <p className="text-th-muted text-[10px] mt-2 leading-relaxed">{result.area_data.floodRisk.description}</p>
               </div>
             )}
-            {result.area_data.housePriceIndex && (
+            {result.area_data.housePriceIndex && (() => {
+              const hpi = result.area_data!.housePriceIndex!;
+              const typeBreakdown = [
+                hpi.averagePriceDetached && { label: 'Detached', price: hpi.averagePriceDetached },
+                hpi.averagePriceSemiDetached && { label: 'Semi', price: hpi.averagePriceSemiDetached },
+                hpi.averagePriceTerraced && { label: 'Terraced', price: hpi.averagePriceTerraced },
+                hpi.averagePriceFlat && { label: 'Flat', price: hpi.averagePriceFlat },
+              ].filter(Boolean) as { label: string; price: number }[];
+              return (
               <div className="bg-th-input/50 rounded-xl p-3">
                 <div className="flex items-center gap-2 mb-2">
                   <span className={`w-2 h-2 rounded-full flex-shrink-0 ${
-                    result.area_data.housePriceIndex.annualChange > 2 ? 'bg-cyan' :
-                    result.area_data.housePriceIndex.annualChange >= 0 ? 'bg-gold' : 'bg-pe-red'
+                    hpi.annualChange > 2 ? 'bg-cyan' :
+                    hpi.annualChange >= 0 ? 'bg-gold' : 'bg-pe-red'
                   }`} />
                   <p className="text-th-secondary text-[10px] uppercase tracking-wider font-medium">UK House Price Index</p>
-                  <span className="text-th-faint text-[9px] ml-auto">{result.area_data.housePriceIndex.period}</span>
+                  <span className="text-th-faint text-[9px] ml-auto">{hpi.period}</span>
                 </div>
                 <div className="grid grid-cols-3 gap-2 text-center">
                   <div>
-                    <p className="text-th-heading text-sm font-bold">£{result.area_data.housePriceIndex.averagePrice.toLocaleString()}</p>
-                    <p className="text-th-muted text-[10px]">Avg price ({result.area_data.housePriceIndex.region})</p>
+                    <p className="text-th-heading text-sm font-bold">£{hpi.averagePrice.toLocaleString()}</p>
+                    <p className="text-th-muted text-[10px]">Avg price ({hpi.region})</p>
                   </div>
                   <div>
                     <p className={`text-sm font-bold ${
-                      result.area_data.housePriceIndex.annualChange > 0 ? 'text-cyan' :
-                      result.area_data.housePriceIndex.annualChange === 0 ? 'text-gold' : 'text-pe-red'
-                    }`}>{result.area_data.housePriceIndex.annualChange > 0 ? '+' : ''}{result.area_data.housePriceIndex.annualChange}%</p>
+                      hpi.annualChange > 0 ? 'text-cyan' :
+                      hpi.annualChange === 0 ? 'text-gold' : 'text-pe-red'
+                    }`}>{hpi.annualChange > 0 ? '+' : ''}{hpi.annualChange}%</p>
                     <p className="text-th-muted text-[10px]">Annual change</p>
                   </div>
                   <div>
                     <p className={`text-sm font-bold ${
-                      result.area_data.housePriceIndex.monthlyChange > 0 ? 'text-cyan' :
-                      result.area_data.housePriceIndex.monthlyChange === 0 ? 'text-gold' : 'text-pe-red'
-                    }`}>{result.area_data.housePriceIndex.monthlyChange > 0 ? '+' : ''}{result.area_data.housePriceIndex.monthlyChange}%</p>
+                      hpi.monthlyChange > 0 ? 'text-cyan' :
+                      hpi.monthlyChange === 0 ? 'text-gold' : 'text-pe-red'
+                    }`}>{hpi.monthlyChange > 0 ? '+' : ''}{hpi.monthlyChange}%</p>
                     <p className="text-th-muted text-[10px]">Monthly change</p>
                   </div>
                 </div>
-                {result.area_data.housePriceIndex.salesVolume && (
-                  <p className="text-th-muted text-[10px] mt-2 text-center">{result.area_data.housePriceIndex.salesVolume.toLocaleString()} transactions recorded</p>
+                {hpi.salesVolume && (
+                  <p className="text-th-muted text-[10px] mt-2 text-center">{hpi.salesVolume.toLocaleString()} transactions recorded</p>
+                )}
+                {typeBreakdown.length > 0 && (
+                  <div className="mt-2 pt-2 border-t border-th-border">
+                    <p className="text-th-muted text-[9px] uppercase tracking-wider mb-1">By property type</p>
+                    <div className="grid grid-cols-4 gap-1 text-center">
+                      {typeBreakdown.map(t => (
+                        <div key={t.label}>
+                          <p className="text-th-heading text-[11px] font-semibold">£{Math.round(t.price / 1000)}k</p>
+                          <p className="text-th-faint text-[9px]">{t.label}</p>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                {(hpi.averagePriceFTB || hpi.averagePriceNewBuild || hpi.affordabilityRatio) && (
+                  <div className="mt-2 pt-2 border-t border-th-border">
+                    <div className="grid grid-cols-3 gap-2 text-center">
+                      {hpi.averagePriceFTB && (
+                        <div>
+                          <p className="text-th-heading text-[11px] font-semibold">£{Math.round(hpi.averagePriceFTB / 1000)}k</p>
+                          <p className="text-th-faint text-[9px]">FTB avg{hpi.annualChangeFTB != null ? ` (${hpi.annualChangeFTB > 0 ? '+' : ''}${hpi.annualChangeFTB}%)` : ''}</p>
+                        </div>
+                      )}
+                      {hpi.averagePriceNewBuild && (
+                        <div>
+                          <p className="text-th-heading text-[11px] font-semibold">£{Math.round(hpi.averagePriceNewBuild / 1000)}k</p>
+                          <p className="text-th-faint text-[9px]">New build</p>
+                        </div>
+                      )}
+                      {hpi.affordabilityRatio && (
+                        <div>
+                          <p className={`text-[11px] font-semibold ${
+                            hpi.affordabilityRatio > 10 ? 'text-pe-red' :
+                            hpi.affordabilityRatio > 7 ? 'text-gold' : 'text-cyan'
+                          }`}>{hpi.affordabilityRatio}x</p>
+                          <p className="text-th-faint text-[9px]">Price/earnings</p>
+                        </div>
+                      )}
+                    </div>
+                    {hpi.medianEarnings && (
+                      <p className="text-th-faint text-[9px] mt-1 text-center">Median earnings: £{hpi.medianEarnings.toLocaleString()}/yr (ONS ASHE)</p>
+                    )}
+                  </div>
                 )}
               </div>
-            )}
+              );
+            })()}
             {result.area_data.planning && (
               <div className="bg-th-input/50 rounded-xl p-3">
                 <div className="flex items-center gap-2 mb-2">
