@@ -353,7 +353,7 @@ export default function AnalysisResults({ result, property }: Props) {
               }}
               className="text-cyan/60 hover:text-cyan text-[11px] mt-1 underline underline-offset-2 transition-colors"
             >
-              {result.comparables_used} Land Registry sales used
+              {result.comparables_used} comparable sales used
             </button>
           )}
         </div>
@@ -485,7 +485,7 @@ export default function AnalysisResults({ result, property }: Props) {
           >
             <div className="flex items-center gap-2">
               <span className={`inline-block transition-transform text-xs text-gray-500 ${showComps ? 'rotate-90' : ''}`}>&#9654;</span>
-              <h3 className="text-white font-semibold text-sm">Land Registry Comparables</h3>
+              <h3 className="text-white font-semibold text-sm">Comparable Sales</h3>
               <span className="text-gray-500 text-xs">
                 ({result.comparables.filter(c => !c.excluded).length} included
                 {result.comparables.some(c => c.excluded) && (

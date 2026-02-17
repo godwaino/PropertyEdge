@@ -387,7 +387,7 @@ export default function PropertyForm({ onSubmit, isLoading, autoOpenImport, coll
 
       {/* Trust cue */}
       <p className="mt-2 text-center text-gray-600 text-[11px]">
-        Uses HM Land Registry sold prices where available
+        Uses HM Land Registry sold prices, postcodes.io and AI analysis
       </p>
       </>}
     </form>

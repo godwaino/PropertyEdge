@@ -18,7 +18,7 @@ const audiences: { label: string; hint: string }[] = [
 const features = [
   {
     label: 'AI Valuation + Comps',
-    desc: 'Backed by real HM Land Registry sold prices',
+    desc: 'Real sold prices, local comps and AI analysis',
     anchor: 'section-comps',
   },
   {
@@ -134,7 +134,7 @@ export default function Hero({ onAnalyseClick, onExtractListing, visible, isExtr
 
       {/* Trust cues */}
       <div className="mt-5 flex flex-wrap justify-center gap-4 text-[11px] text-gray-500">
-        <span>Powered by HM Land Registry sold prices + local comparables</span>
+        <span>Powered by HM Land Registry, postcodes.io and AI analysis</span>
         <span>&middot;</span>
         <span>No account needed</span>
         <span>&middot;</span>

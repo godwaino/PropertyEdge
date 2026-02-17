@@ -1,10 +1,10 @@
 import { useState, useEffect } from 'react';
 
 const steps = [
-  'Fetching Land Registry comparables',
-  'Scoring the deal',
-  'Writing negotiation points',
-  'Generating report',
+  'Fetching sold prices and comparables',
+  'Detecting outliers and scoring similarity',
+  'Running AI valuation analysis',
+  'Building negotiation playbook',
 ];
 
 export default function LoadingState() {
