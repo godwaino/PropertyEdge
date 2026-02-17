@@ -1,8 +1,11 @@
 import { useState } from 'react';
+import { PropertyInput } from '../types/property';
+import { FEATURED } from './FeaturedProperties';
 
 interface Props {
   onAnalyseClick: () => void;
   onExtractListing: (text: string) => void;
+  onTryExample: (property: PropertyInput) => void;
   visible: boolean;
   isExtracting: boolean;
   selectedPersona: string | null;
@@ -38,7 +41,10 @@ const features = [
   },
 ];
 
-export default function Hero({ onAnalyseClick, onExtractListing, visible, isExtracting, selectedPersona, onPersonaSelect }: Props) {
+// Pick 3 diverse examples for the quick-try row
+const EXAMPLES = FEATURED.filter((_, i) => i === 0 || i === 1 || i === 2);
+
+export default function Hero({ onAnalyseClick, onExtractListing, onTryExample, visible, isExtracting, selectedPersona, onPersonaSelect }: Props) {
   const [pasteText, setPasteText] = useState('');
 
   if (!visible) return null;
@@ -95,6 +101,20 @@ export default function Hero({ onAnalyseClick, onExtractListing, visible, isExtr
         <p className="mt-2 text-gray-600 text-xs">
           We&apos;ll auto-fill the details for you. Or <button onClick={onAnalyseClick} className="text-cyan/70 hover:text-cyan underline-offset-2 underline">fill in details manually</button>
         </p>
+
+        {/* Try an example */}
+        <div className="mt-3 flex flex-wrap items-center justify-center gap-2">
+          <span className="text-gray-600 text-[11px]">Try an example:</span>
+          {EXAMPLES.map((ex, i) => (
+            <button
+              key={i}
+              onClick={() => onTryExample(ex.property)}
+              className="text-[11px] px-2.5 py-1 rounded-full border border-gray-700 text-gray-400 hover:text-cyan hover:border-cyan/50 bg-navy-light/40 transition-colors"
+            >
+              {ex.label}
+            </button>
+          ))}
+        </div>
       </div>
 
       {/* Audience pills */}

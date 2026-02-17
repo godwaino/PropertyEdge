@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import Header from './components/Header';
 import Hero from './components/Hero';
+import FeaturedProperties from './components/FeaturedProperties';
 import PropertyForm from './components/PropertyForm';
 import AnalysisResults from './components/AnalysisResults';
 import LoadingState from './components/LoadingState';
@@ -34,6 +35,11 @@ export default function App() {
     setTimeout(() => {
       document.getElementById('analyze')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }, 50);
+  };
+
+  // Auto-fill from example card/button and immediately analyse
+  const handleTryExample = (property: PropertyInput) => {
+    handleAnalyze(property);
   };
 
   // Extract listing text from hero paste box, then auto-fill form and scroll
@@ -162,10 +168,16 @@ export default function App() {
         <Hero
           onAnalyseClick={handleAnalyseClick}
           onExtractListing={handleExtractListing}
+          onTryExample={handleTryExample}
           visible={showHero}
           isExtracting={isExtracting}
           selectedPersona={selectedPersona}
           onPersonaSelect={(p) => setSelectedPersona(p || null)}
+        />
+
+        <FeaturedProperties
+          onSelect={handleTryExample}
+          visible={showHero}
         />
 
         <main className="px-4 mt-2">
