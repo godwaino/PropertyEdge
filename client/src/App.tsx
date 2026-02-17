@@ -114,6 +114,15 @@ export default function App() {
     }
   };
 
+  // Scroll loading state into view when analysis starts
+  useEffect(() => {
+    if (isLoading) {
+      setTimeout(() => {
+        document.getElementById('loading-state')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }, 50);
+    }
+  }, [isLoading]);
+
   // Scroll results into view when they appear
   useEffect(() => {
     if (result && !isLoading) {
@@ -210,7 +219,7 @@ export default function App() {
             </div>
           )}
 
-          {isLoading && <LoadingState />}
+          {isLoading && <div id="loading-state"><LoadingState /></div>}
 
           {result && lastProperty && !isLoading && (
             <div id="results">
