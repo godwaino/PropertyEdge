@@ -69,18 +69,30 @@ function ConfidenceLabel({ confidence, drivers }: { confidence: number; drivers?
   );
 }
 
+// Critical keywords that should always be surfaced in the top 2
+const CRITICAL_PATTERNS = /\b(lease|service charge|ground rent|flood|subsidence|cladding|EWS1|structural|asbestos|contamination|unmortgage|negative equity)\b/i;
+
+function rankByMateriality(items: AnalysisItem[]): AnalysisItem[] {
+  return [...items].sort((a, b) => {
+    // Critical issues always float to the top
+    const aCritical = CRITICAL_PATTERNS.test(a.title) || CRITICAL_PATTERNS.test(a.description) ? 1 : 0;
+    const bCritical = CRITICAL_PATTERNS.test(b.title) || CRITICAL_PATTERNS.test(b.description) ? 1 : 0;
+    if (aCritical !== bCritical) return bCritical - aCritical;
+    // Then sort by impact (highest first)
+    return b.impact - a.impact;
+  });
+}
+
 function CollapsibleSection({
   title,
   items,
   color,
-  defaultOpen = false,
 }: {
   title: string;
   items: AnalysisItem[];
   color: 'red' | 'gold' | 'cyan';
-  defaultOpen?: boolean;
 }) {
-  const [open, setOpen] = useState(defaultOpen);
+  const [expanded, setExpanded] = useState(false);
   const colorMap = {
     red: { border: 'border-pe-red/20', badge: 'bg-pe-red/10 text-pe-red', dot: 'bg-pe-red', header: 'text-pe-red' },
     gold: { border: 'border-gold/20', badge: 'bg-gold/10 text-gold', dot: 'bg-gold', header: 'text-gold' },
@@ -88,42 +100,50 @@ function CollapsibleSection({
   };
   const c = colorMap[color];
   const totalImpact = items.reduce((sum, i) => sum + i.impact, 0);
+  const ranked = useMemo(() => rankByMateriality(items), [items]);
+  const preview = ranked.slice(0, 2);
+  const hasMore = ranked.length > 2;
+  const visible = expanded ? ranked : preview;
 
   return (
     <div>
-      <button
-        onClick={() => setOpen(!open)}
-        className="w-full flex items-center justify-between py-2 group"
-      >
+      <div className="flex items-center justify-between py-2">
         <div className="flex items-center gap-2">
-          <span className={`inline-block transition-transform text-xs text-gray-500 ${open ? 'rotate-90' : ''}`}>&#9654;</span>
+          <div className={`w-2 h-2 rounded-full ${c.dot} flex-shrink-0`} />
           <h3 className="text-white font-semibold text-sm">{title}</h3>
           <span className="text-gray-500 text-xs">({items.length})</span>
         </div>
         <span className={`text-xs px-2 py-0.5 rounded ${c.badge}`}>
           {fmt(totalImpact)} est. impact
         </span>
-      </button>
+      </div>
 
-      {open && (
-        <div className="space-y-2 mt-1 mb-4">
-          {items.map((item, i) => (
-            <div key={i} className={`bg-navy-light border ${c.border} rounded-xl p-4`}>
-              <div className="flex items-start justify-between gap-3">
-                <div className="flex items-start gap-2 flex-1">
-                  <div className={`w-1.5 h-1.5 rounded-full ${c.dot} mt-1.5 flex-shrink-0`} />
-                  <div>
-                    <p className="text-white font-medium text-sm">{item.title}</p>
-                    <p className="text-gray-400 text-xs mt-1 leading-relaxed">{item.description}</p>
-                  </div>
+      <div className="space-y-2 mt-1 mb-2">
+        {visible.map((item, i) => (
+          <div key={i} className={`bg-navy-light border ${c.border} rounded-xl p-4`}>
+            <div className="flex items-start justify-between gap-3">
+              <div className="flex items-start gap-2 flex-1">
+                <div className={`w-1.5 h-1.5 rounded-full ${c.dot} mt-1.5 flex-shrink-0`} />
+                <div>
+                  <p className="text-white font-medium text-sm">{item.title}</p>
+                  <p className="text-gray-400 text-xs mt-1 leading-relaxed">{item.description}</p>
                 </div>
-                <span className={`text-xs px-2 py-1 rounded-md ${c.badge} whitespace-nowrap`}>
-                  {fmt(item.impact)}
-                </span>
               </div>
+              <span className={`text-xs px-2 py-1 rounded-md ${c.badge} whitespace-nowrap`}>
+                {fmt(item.impact)}
+              </span>
             </div>
-          ))}
-        </div>
+          </div>
+        ))}
+      </div>
+
+      {hasMore && (
+        <button
+          onClick={() => setExpanded(!expanded)}
+          className={`text-xs ${c.badge} px-3 py-1 rounded-full transition-colors hover:opacity-80 mb-3`}
+        >
+          {expanded ? 'Show less' : `View all (${ranked.length})`}
+        </button>
       )}
     </div>
   );
@@ -767,7 +787,7 @@ export default function AnalysisResults({ result, property }: Props) {
       {/* Collapsible detail sections */}
       <div id="section-risks" className="bg-navy-card border border-gray-800 rounded-2xl p-5 space-y-1">
         {result.red_flags.length > 0 && (
-          <CollapsibleSection title="Red Flags" items={result.red_flags} color="red" defaultOpen={true} />
+          <CollapsibleSection title="Red Flags" items={result.red_flags} color="red" />
         )}
         {result.warnings.length > 0 && (
           <CollapsibleSection title="Warnings" items={result.warnings} color="gold" />
