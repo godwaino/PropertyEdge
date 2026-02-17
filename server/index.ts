@@ -1521,40 +1521,21 @@ Where:
 app.post('/api/demo', rateLimit, async (req, res) => {
   const property: PropertyRequest = req.body;
 
-  // --- Infer missing fields (match AI's ability to work with partial info) ---
-  // Estimate size from bedrooms + type if not provided
-  if (!property.sizeSqm || property.sizeSqm <= 0) {
-    const avgSqmPerBed: Record<string, number> = {
-      flat: 32, terraced: 30, 'semi-detached': 32, detached: 38, bungalow: 34,
-    };
-    const perBed = avgSqmPerBed[property.propertyType] || 30;
-    const beds = property.bedrooms || 2;
-    property.sizeSqm = Math.round(perBed * Math.max(beds, 1) + 15); // +15 for common areas
-  }
-  // Default bedrooms from size if missing
+  // --- Infer missing fields before fetching (fields that don't need external data) ---
   if (!property.bedrooms || property.bedrooms <= 0) {
-    if (property.sizeSqm > 120) property.bedrooms = 4;
-    else if (property.sizeSqm > 85) property.bedrooms = 3;
-    else if (property.sizeSqm > 50) property.bedrooms = 2;
-    else property.bedrooms = 1;
+    if (property.sizeSqm && property.sizeSqm > 120) property.bedrooms = 4;
+    else if (property.sizeSqm && property.sizeSqm > 85) property.bedrooms = 3;
+    else if (property.sizeSqm && property.sizeSqm > 50) property.bedrooms = 2;
+    else property.bedrooms = 2;
   }
-  // Default property type from bedrooms if missing
   if (!property.propertyType) {
     if (property.bedrooms >= 4) property.propertyType = 'detached';
     else if (property.bedrooms >= 3) property.propertyType = 'semi-detached';
     else property.propertyType = 'flat';
   }
-  // Default year built
-  if (!property.yearBuilt || property.yearBuilt <= 0) {
-    property.yearBuilt = 2000;
-  }
-  // Default tenure
   if (!property.tenure) {
     property.tenure = property.propertyType === 'flat' ? 'leasehold' : 'freehold';
   }
-
-  const price = property.askingPrice || 285000;
-  const sqm = property.sizeSqm;
 
   // Resolve partial postcodes before fetching comps
   if (property.postcode) {
@@ -1576,6 +1557,70 @@ app.post('/api/demo', rateLimit, async (req, res) => {
     comparables = enrichWithEpc(comparables, epcDataDemo);
     dataSources.push('EPC Register');
   }
+
+  // --- Infer missing fields from fetched data ---
+  // Infer yearBuilt from EPC construction-age-band or Land Registry new-build dates
+  if (!property.yearBuilt || property.yearBuilt <= 0) {
+    let inferredYear: number | null = null;
+
+    // Try EPC construction age bands from the area
+    if (epcDataDemo.size > 0) {
+      const ageBands: number[] = [];
+      for (const entry of epcDataDemo.values()) {
+        if (entry.constructionYear) {
+          // Format can be "2007", "England and Wales: 1967-1975", "1950-1966", etc.
+          const yearMatch = entry.constructionYear.match(/(\d{4})\s*-\s*(\d{4})/);
+          if (yearMatch) {
+            ageBands.push(Math.round((parseInt(yearMatch[1]) + parseInt(yearMatch[2])) / 2));
+          } else {
+            const singleYear = entry.constructionYear.match(/(\d{4})/);
+            if (singleYear) ageBands.push(parseInt(singleYear[1]));
+          }
+        }
+      }
+      if (ageBands.length > 0) {
+        ageBands.sort((a, b) => a - b);
+        inferredYear = ageBands[Math.floor(ageBands.length / 2)]; // median
+      }
+    }
+
+    // Fallback: if most comps are new-builds, use the earliest new-build date
+    if (!inferredYear && comparables.length > 0) {
+      const newBuilds = comparables.filter(c => c.newBuild);
+      if (newBuilds.length > 0) {
+        const dates = newBuilds.map(c => new Date(c.date).getFullYear()).sort();
+        inferredYear = dates[0];
+      }
+    }
+
+    property.yearBuilt = inferredYear || 0; // 0 = genuinely unknown, handled downstream
+  }
+
+  // Infer sizeSqm from EPC floor areas if not provided
+  if (!property.sizeSqm || property.sizeSqm <= 0) {
+    // Try to get floor area from EPC data for similar properties
+    if (epcDataDemo.size > 0) {
+      const areas: number[] = [];
+      for (const entry of epcDataDemo.values()) {
+        if (entry.floorArea > 0) areas.push(entry.floorArea);
+      }
+      if (areas.length > 0) {
+        areas.sort((a, b) => a - b);
+        property.sizeSqm = areas[Math.floor(areas.length / 2)]; // median
+      }
+    }
+    // Final fallback: estimate from bedrooms + type
+    if (!property.sizeSqm || property.sizeSqm <= 0) {
+      const avgSqmPerBed: Record<string, number> = {
+        flat: 32, terraced: 30, 'semi-detached': 32, detached: 38, bungalow: 34,
+      };
+      const perBed = avgSqmPerBed[property.propertyType] || 30;
+      property.sizeSqm = Math.round(perBed * Math.max(property.bedrooms, 1) + 15);
+    }
+  }
+
+  const price = property.askingPrice || 285000;
+  const sqm = property.sizeSqm;
 
   // Enrich: outlier detection
   comparables = detectOutliers(comparables, property.propertyType || '');
@@ -1679,10 +1724,12 @@ app.post('/api/demo', rateLimit, async (req, res) => {
     const sizeRatio = sqm / avgCompSqm;
     valuation = Math.round(avgPrice * sizeRatio / 1000) * 1000;
 
-    // Adjust for year built
-    const age = new Date().getFullYear() - (property.yearBuilt || 2000);
-    if (age < 5) valuation = Math.round(valuation * 1.05 / 1000) * 1000;
-    else if (age > 50) valuation = Math.round(valuation * 0.93 / 1000) * 1000;
+    // Adjust for year built (skip if unknown)
+    if (property.yearBuilt > 0) {
+      const age = new Date().getFullYear() - property.yearBuilt;
+      if (age < 5) valuation = Math.round(valuation * 1.05 / 1000) * 1000;
+      else if (age > 50) valuation = Math.round(valuation * 0.93 / 1000) * 1000;
+    }
 
     // Leasehold short lease discount
     if (property.tenure === 'leasehold' && property.leaseYears && property.leaseYears < 80) {
@@ -1707,10 +1754,12 @@ app.post('/api/demo', rateLimit, async (req, res) => {
     const typeMultiplier: Record<string, number> = { flat: 1.0, terraced: 0.95, 'semi-detached': 0.9, detached: 1.05, bungalow: 0.85 };
     basePsm *= typeMultiplier[property.propertyType] || 1.0;
 
-    const age = new Date().getFullYear() - (property.yearBuilt || 2000);
-    if (age < 5) basePsm *= 1.08;
-    else if (age < 15) basePsm *= 1.03;
-    else if (age > 50) basePsm *= 0.92;
+    if (property.yearBuilt > 0) {
+      const age = new Date().getFullYear() - property.yearBuilt;
+      if (age < 5) basePsm *= 1.08;
+      else if (age < 15) basePsm *= 1.03;
+      else if (age > 50) basePsm *= 0.92;
+    }
 
     if (property.tenure === 'leasehold' && property.leaseYears && property.leaseYears < 80) {
       basePsm *= 0.85;
