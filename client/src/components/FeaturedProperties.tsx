@@ -158,7 +158,6 @@ export default function FeaturedProperties({ onSelect, visible }: Props) {
   return (
     <section className="max-w-5xl mx-auto px-4 pb-10 animate-slide-up">
       <div className="text-center mb-5">
-        <p className="text-th-muted text-[10px] uppercase tracking-wider mb-1">Example properties</p>
         <h3 className="text-th-heading text-lg font-semibold">Featured Properties</h3>
         <p className="text-th-muted text-xs mt-1">Click any card to run a full live analysis</p>
       </div>
