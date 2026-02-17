@@ -1648,7 +1648,7 @@ app.post('/api/demo', rateLimit, async (req, res) => {
     }
 
     const avgPsm = Math.round(valuation / sqm);
-    basisText = `Based on ${comparablesUsed} real Land Registry sales in ${property.postcode}. Average sold price: £${Math.round(avgPrice).toLocaleString()}. Estimated £${avgPsm}/sqm for ${sqm}sqm. Demo mode — add API key for full AI analysis.`;
+    basisText = `Based on ${comparablesUsed} Land Registry sales in ${property.postcode}. Average sold price: £${Math.round(avgPrice).toLocaleString()}. Estimated £${avgPsm}/sqm for ${sqm}sqm.`;
   } else {
     // Fallback: estimate from postcode heuristic
     const postcodePrefix = (property.postcode || '').split(/\d/)[0].toUpperCase();
@@ -1675,7 +1675,7 @@ app.post('/api/demo', rateLimit, async (req, res) => {
     }
 
     valuation = Math.round(basePsm * sqm / 1000) * 1000;
-    basisText = `Estimated at £${Math.round(basePsm).toLocaleString()}/sqm for ${property.propertyType || 'flat'}s in ${property.postcode || 'this area'}. No Land Registry data found for this postcode. Demo mode — add API key for full AI analysis.`;
+    basisText = `Estimated at £${Math.round(basePsm).toLocaleString()}/sqm for ${property.propertyType || 'flat'}s in ${property.postcode || 'this area'}. Limited Land Registry data for this postcode — valuation based on area price benchmarks.`;
   }
 
   const savings = price - valuation;
@@ -1708,12 +1708,272 @@ app.post('/api/demo', rateLimit, async (req, res) => {
     includedComps, confidenceDrivers, valuation, price, property.propertyType || ''
   );
 
-  const summaryText = `Fair value: ~£${valuation.toLocaleString()} — ${comparablesUsed > 0 ? `based on ${comparablesUsed} recent Land Registry sales in ${property.postcode}` : 'estimated from area averages'}. ${savings > 0 ? 'Asking price is above our valuation.' : 'Asking price is in line with or below market value.'}`;
+  // --- Dynamic confidence based on data quality ---
+  const sameTypeComps = includedComps.filter(c =>
+    c.propertyType.includes((property.propertyType || '').split('-')[0])
+  );
+  const recentComps = includedComps.filter(c => {
+    const months = (Date.now() - new Date(c.date).getTime()) / (1000 * 60 * 60 * 24 * 30);
+    return months <= 12;
+  });
+  let confidence = 15; // baseline: low confidence
+  if (includedComps.length >= 5 && sameTypeComps.length >= 3) confidence = 8;
+  else if (includedComps.length >= 5) confidence = 10;
+  else if (includedComps.length >= 3) confidence = 12;
+  if (recentComps.length < 2) confidence += 2; // penalise stale data
+  // Cap at reasonable range
+  confidence = Math.min(20, Math.max(5, confidence));
+
+  // --- Dynamic red flags ---
+  const redFlags: { title: string; description: string; impact: number }[] = [];
+  const propPrice = price || valuation;
+
+  if (property.tenure === 'leasehold' && property.groundRent && property.groundRent > 0) {
+    redFlags.push({
+      title: 'Ground Rent Escalation Risk',
+      description: `Ground rent is £${property.groundRent}/yr. Check the lease for escalation or doubling clauses — these can make properties unmortgageable. Lenders increasingly refuse properties with ground rents above 0.1% of value (£${Math.round(propPrice * 0.001).toLocaleString()}/yr for this property).`,
+      impact: Math.round(propPrice * 0.05),
+    });
+  }
+  if (property.tenure === 'leasehold' && property.leaseYears && property.leaseYears < 80) {
+    redFlags.push({
+      title: 'Short Lease — Below 80-Year Threshold',
+      description: `Only ${property.leaseYears} years remaining. Below 80 years, lease extensions become significantly more expensive due to "marriage value" rules. Many lenders won't offer mortgages below 70 years. Estimated extension cost: £${Math.round(propPrice * 0.12).toLocaleString()}–£${Math.round(propPrice * 0.20).toLocaleString()}.`,
+      impact: Math.round(propPrice * 0.15),
+    });
+  }
+  if (floodDataDemo && floodDataDemo.riskLevel && floodDataDemo.riskLevel !== 'Low' && floodDataDemo.riskLevel !== 'Very Low') {
+    redFlags.push({
+      title: `Flood Risk: ${floodDataDemo.riskLevel} Zone`,
+      description: `This property is in a ${floodDataDemo.riskLevel.toLowerCase()} flood risk area. This can increase insurance premiums by £500–£2,000/yr and may reduce resale value. Check Environment Agency flood maps for specific risk to this address.`,
+      impact: Math.round(propPrice * 0.04),
+    });
+  }
+  if (property.serviceCharge && property.serviceCharge > 3000) {
+    redFlags.push({
+      title: 'High Service Charge',
+      description: `At £${property.serviceCharge.toLocaleString()}/yr, the service charge is notably high. Over 10 years that's £${(property.serviceCharge * 10).toLocaleString()} before any increases. Request the last 3 years of accounts and check for planned major works or sinking fund shortfalls.`,
+      impact: Math.round(property.serviceCharge * 5),
+    });
+  }
+  if (savings < -propPrice * 0.10) {
+    redFlags.push({
+      title: 'Asking Price Significantly Below Market Value',
+      description: `The asking price is more than 10% below our valuation — this warrants caution. Investigate why: possible structural issues, problematic neighbours, pending planning applications, or motivated seller. A price this low often signals undisclosed problems.`,
+      impact: Math.round(propPrice * 0.08),
+    });
+  }
+  // Ensure at least 2 red flags
+  if (redFlags.length < 2) {
+    if (!redFlags.some(f => f.title.includes('Service Charge')) && property.serviceCharge && property.serviceCharge > 0) {
+      redFlags.push({
+        title: 'Service Charge Costs',
+        description: `Annual service charge of £${property.serviceCharge.toLocaleString()} adds ongoing cost. Over a 10-year hold this totals £${(property.serviceCharge * 10).toLocaleString()} — factor this into your total cost of ownership when comparing to freehold alternatives.`,
+        impact: Math.round(property.serviceCharge * 3),
+      });
+    }
+    if (redFlags.length < 2) {
+      const age = new Date().getFullYear() - (property.yearBuilt || 2000);
+      if (age > 30) {
+        redFlags.push({
+          title: 'Aging Property — Maintenance Costs',
+          description: `Built in ${property.yearBuilt || 2000} (${age} years old), this property may need roof, boiler, window, or wiring upgrades. Budget £${Math.round(propPrice * 0.03).toLocaleString()}–£${Math.round(propPrice * 0.06).toLocaleString()} for deferred maintenance.`,
+          impact: Math.round(propPrice * 0.04),
+        });
+      } else {
+        redFlags.push({
+          title: 'Limited Price Transparency',
+          description: `Only ${comparablesUsed} comparable sales were available to value this property. With limited evidence, the true market value could be ${confidence}% higher or lower than estimated. Consider getting a RICS valuation for added certainty.`,
+          impact: Math.round(propPrice * 0.03),
+        });
+      }
+    }
+  }
+
+  // --- Dynamic warnings ---
+  const warnings: { title: string; description: string; impact: number }[] = [];
+
+  if (property.tenure === 'leasehold' && property.leaseYears && property.leaseYears > 80 && property.leaseYears < 125) {
+    warnings.push({
+      title: 'Lease Below 125 Years',
+      description: `At ${property.leaseYears} years the lease is adequate but not ideal. It will drop below the 80-year threshold in ${property.leaseYears - 80} years, at which point extension costs rise sharply. Consider negotiating a lease extension as part of the purchase.`,
+      impact: Math.round(propPrice * 0.03),
+    });
+  }
+  if (crimeDataDemo && crimeDataDemo.total > 100) {
+    warnings.push({
+      title: 'Above-Average Crime in Area',
+      description: `${crimeDataDemo.total} crimes reported in the local area over the most recent period. ${crimeDataDemo.topCategory ? `Most common: ${crimeDataDemo.topCategory}.` : ''} This is above the national average and may affect insurance premiums and resale appeal.`,
+      impact: Math.round(propPrice * 0.02),
+    });
+  }
+  if (areaDataDemo.epcSummary && areaDataDemo.epcSummary.averageRating && ['E', 'F', 'G'].includes(areaDataDemo.epcSummary.averageRating)) {
+    warnings.push({
+      title: 'Poor Energy Efficiency in Area',
+      description: `Properties in ${property.postcode} average an EPC rating of ${areaDataDemo.epcSummary.averageRating}. Poor EPC ratings mean higher energy bills (£500–£1,500/yr above a C-rated home) and potential future retrofit costs under Minimum Energy Efficiency Standards.`,
+      impact: Math.round(propPrice * 0.02),
+    });
+  }
+  if (property.yearBuilt && property.yearBuilt >= 2015 && property.yearBuilt <= 2023 && property.propertyType === 'flat') {
+    warnings.push({
+      title: 'EWS1 Fire Safety Certificate May Be Required',
+      description: `Flats built ${property.yearBuilt} may be affected by post-Grenfell cladding regulations. If the building is over 11m tall, an EWS1 form may be needed for mortgage approval. Check with the managing agent before exchange.`,
+      impact: Math.round(propPrice * 0.02),
+    });
+  }
+  if (hpiDataDemo && hpiDataDemo.annualChange !== undefined && hpiDataDemo.annualChange < -1) {
+    warnings.push({
+      title: 'Declining Local House Prices',
+      description: `House prices in this area have fallen ${Math.abs(hpiDataDemo.annualChange).toFixed(1)}% over the past year. A declining market means the property could be worth less by completion. Factor in the trend when setting your offer.`,
+      impact: Math.round(propPrice * Math.abs(hpiDataDemo.annualChange) / 100),
+    });
+  }
+  if (property.tenure === 'leasehold') {
+    warnings.push({
+      title: 'Leasehold Management Costs',
+      description: `As a leasehold property, you'll depend on a management company for building maintenance decisions. Request the last 3 years of service charge accounts, check the sinking fund balance, and ask about any planned major works.`,
+      impact: Math.round(propPrice * 0.01),
+    });
+  }
+  // Ensure at least 2 warnings
+  if (warnings.length < 1) {
+    const age = new Date().getFullYear() - (property.yearBuilt || 2000);
+    if (age > 15 && age <= 30) {
+      warnings.push({
+        title: 'Mid-Age Property — Check Key Systems',
+        description: `At ${age} years old, the boiler, windows, and roof may be approaching end of life. Budget for potential replacements within the next 5–10 years. Request a homebuyer's survey to assess condition.`,
+        impact: Math.round(propPrice * 0.02),
+      });
+    }
+  }
+  if (warnings.length < 2) {
+    if (includedComps.length > 0) {
+      const prices = includedComps.map(c => c.price);
+      const min = Math.min(...prices);
+      const max = Math.max(...prices);
+      const spread = (max - min) / ((max + min) / 2);
+      if (spread > 0.3) {
+        warnings.push({
+          title: 'Wide Price Variance in Area',
+          description: `Comparable sales range from £${min.toLocaleString()} to £${max.toLocaleString()} — a ${Math.round(spread * 100)}% spread. This suggests mixed housing stock and makes precise valuation harder. View the property carefully to assess which end of the range it falls.`,
+          impact: Math.round(propPrice * 0.02),
+        });
+      }
+    }
+  }
+  if (warnings.length < 2) {
+    warnings.push({
+      title: 'Stamp Duty Costs',
+      description: `At £${propPrice.toLocaleString()}, stamp duty for a main residence will add approximately £${Math.round(Math.max(0, (propPrice - 250000) * 0.05) / 100) * 100} to acquisition costs. Factor this into your total budget.`,
+      impact: Math.round(Math.max(0, (propPrice - 250000) * 0.05) / 100) * 100,
+    });
+  }
+
+  // --- Dynamic positives ---
+  const positives: { title: string; description: string; impact: number }[] = [];
+  const age = new Date().getFullYear() - (property.yearBuilt || 2000);
+
+  if (age <= 10) {
+    positives.push({
+      title: 'Modern Build with Warranty Protection',
+      description: `Built in ${property.yearBuilt}, this property ${age <= 5 ? 'likely still has NHBC warranty coverage (10 years from completion), protecting against structural defects' : 'benefits from modern building standards including better insulation, double glazing, and updated wiring'}. Lower maintenance costs in the near term.`,
+      impact: Math.round(propPrice * 0.04),
+    });
+  } else if (age >= 80) {
+    positives.push({
+      title: 'Period Property Character',
+      description: `Built in ${property.yearBuilt}, this ${property.propertyType || 'property'} is likely to feature period details (original fireplaces, high ceilings, cornicing) that are highly sought after. Period homes in good condition typically command a 5–10% premium over modern equivalents.`,
+      impact: Math.round(propPrice * 0.06),
+    });
+  }
+  if (property.tenure === 'freehold') {
+    positives.push({
+      title: 'Freehold Tenure',
+      description: `As freehold, you own the property and land outright with no ground rent, service charge disputes, or lease extension costs. This is the most desirable tenure and supports stronger long-term value.`,
+      impact: Math.round(propPrice * 0.03),
+    });
+  } else if (property.leaseYears && property.leaseYears >= 900) {
+    positives.push({
+      title: `${property.leaseYears}-Year Lease — Effectively Freehold`,
+      description: `With ${property.leaseYears} years remaining, the lease length has no practical impact on value or mortgageability. No lease extension will ever be needed.`,
+      impact: Math.round(propPrice * 0.03),
+    });
+  } else if (property.leaseYears && property.leaseYears >= 125) {
+    positives.push({
+      title: 'Adequate Lease Length',
+      description: `At ${property.leaseYears} years remaining, the lease comfortably exceeds the 80-year threshold and won't affect mortgage options. However, it may need extending within ${property.leaseYears - 80} years.`,
+      impact: Math.round(propPrice * 0.01),
+    });
+  }
+  if (hpiDataDemo && hpiDataDemo.annualChange !== undefined && hpiDataDemo.annualChange > 2) {
+    positives.push({
+      title: 'Strong Local Price Growth',
+      description: `House prices in this area have grown ${hpiDataDemo.annualChange.toFixed(1)}% over the past year — above the national average. Sustained growth suggests healthy demand and supports future appreciation.`,
+      impact: Math.round(propPrice * hpiDataDemo.annualChange / 100),
+    });
+  }
+  if (floodDataDemo && (!floodDataDemo.riskLevel || floodDataDemo.riskLevel === 'Low' || floodDataDemo.riskLevel === 'Very Low')) {
+    positives.push({
+      title: 'Low Flood Risk',
+      description: `This property is in a low flood risk area according to Environment Agency data. This means standard insurance premiums and no flood-related value discount.`,
+      impact: Math.round(propPrice * 0.02),
+    });
+  }
+  if (property.sizeSqm && property.bedrooms) {
+    const sqmPerBed: Record<string, number> = { flat: 30, terraced: 28, 'semi-detached': 30, detached: 32, bungalow: 30 };
+    const expectedSqm = (sqmPerBed[property.propertyType || 'flat'] || 30) * property.bedrooms;
+    if (property.sizeSqm > expectedSqm * 1.15) {
+      positives.push({
+        title: 'Above-Average Floor Area',
+        description: `At ${property.sizeSqm}sqm for a ${property.bedrooms}-bed ${property.propertyType || 'property'}, this is approximately ${Math.round(((property.sizeSqm / expectedSqm) - 1) * 100)}% larger than typical. Larger units command a premium at resale.`,
+        impact: Math.round(propPrice * 0.03),
+      });
+    }
+  }
+  if (hpiDataDemo?.affordabilityRatio && hpiDataDemo.affordabilityRatio < 7) {
+    positives.push({
+      title: 'Affordable Relative to Local Earnings',
+      description: `The price-to-earnings ratio here is ${hpiDataDemo.affordabilityRatio}x — below the national average of ~8x. More affordable areas tend to have broader buyer pools, supporting demand and resale liquidity.`,
+      impact: Math.round(propPrice * 0.02),
+    });
+  }
+  if (comparablesUsed >= 5 && sameTypeComps.length >= 3) {
+    positives.push({
+      title: 'Strong Comparable Evidence',
+      description: `Valuation is supported by ${comparablesUsed} recent sales including ${sameTypeComps.length} same-type (${property.propertyType}) transactions. This gives high confidence in the price estimate.`,
+      impact: Math.round(propPrice * 0.01),
+    });
+  }
+  // Ensure at least 2 positives
+  if (positives.length < 2) {
+    positives.push({
+      title: `${property.bedrooms || 2}-Bed ${(property.propertyType || 'flat').charAt(0).toUpperCase() + (property.propertyType || 'flat').slice(1)} in ${property.postcode}`,
+      description: `${property.bedrooms || 2}-bedroom ${property.propertyType || 'flat'}s are the most liquid property type in most UK markets — easy to rent, easy to resell. This supports long-term flexibility.`,
+      impact: Math.round(propPrice * 0.02),
+    });
+  }
+  if (positives.length < 2) {
+    positives.push({
+      title: 'Established Residential Area',
+      description: `${property.postcode} is an established residential postcode with existing amenities, transport links, and a track record of property transactions. Not a speculative or unproven location.`,
+      impact: Math.round(propPrice * 0.01),
+    });
+  }
+
+  // --- Richer summary referencing data ---
+  const summaryParts: string[] = [];
+  if (comparablesUsed > 0) summaryParts.push(`based on ${comparablesUsed} Land Registry sales in ${property.postcode}`);
+  else summaryParts.push('estimated from area benchmarks');
+  if (savings > propPrice * 0.05) summaryParts.push('asking price appears above market evidence');
+  else if (savings < -propPrice * 0.03) summaryParts.push('asking price is below our estimated market value');
+  else summaryParts.push('asking price is broadly in line with market evidence');
+  if (redFlags.length > 0) summaryParts.push(redFlags[0].title.toLowerCase());
+  const summaryText = `Fair value: ~£${valuation.toLocaleString()} — ${summaryParts.join('; ')}.`;
 
   res.json({
     valuation: {
       amount: valuation,
-      confidence: includedComps.length >= 3 ? 10 : 15,
+      confidence,
       basis: basisText,
       confidence_drivers: confidenceDrivers,
     },
@@ -1740,62 +2000,12 @@ app.post('/api/demo', rateLimit, async (req, res) => {
       offer_low: offerLow,
       offer_high: offerHigh,
       walk_away: walkAway,
-      reasoning: `Open at £${offerLow.toLocaleString()} (8% below valuation) citing any issues found. Aim for £${offerHigh.toLocaleString()}. Walk away above £${walkAway.toLocaleString()}. Demo mode — add API key for AI-tailored negotiation strategy.`,
+      reasoning: `Open at £${offerLow.toLocaleString()} (8% below valuation) — ${comparablesUsed > 0 ? `comparable sales in ${property.postcode} support a value around £${valuation.toLocaleString()}` : 'limited local data justifies a conservative opening'}. Aim to settle around £${offerHigh.toLocaleString()}. Walk away above £${walkAway.toLocaleString()} — beyond this point the deal no longer offers a margin of safety.`,
       negotiation_points: negotiationPoints,
     },
-    red_flags: [
-      {
-        title: 'Leasehold Ground Rent Escalation Risk',
-        description: `Ground rent of £${property.groundRent || 250}/yr may be subject to escalation clauses. Check the lease for doubling clauses which could make the property unmortgageable in future. This is a known issue in ${property.postcode || 'this area'} for properties built around ${property.yearBuilt || 2019}.`,
-        impact: 15000,
-      },
-      {
-        title: 'Service Charge Above Area Average',
-        description: `At £${property.serviceCharge || 1200}/yr, the service charge is approximately 18% above the average for comparable ${property.propertyType || 'flat'}s in ${property.postcode || 'this postcode'}. Over a 10-year period this represents significant additional cost.`,
-        impact: 8500,
-      },
-    ],
-    warnings: [
-      {
-        title: 'EWS1 Fire Safety Certificate',
-        description: `Properties built around ${property.yearBuilt || 2019} in this area may require an EWS1 form. If the building has cladding, obtaining this certificate can delay sales and incur remediation costs.`,
-        impact: 4000,
-      },
-      {
-        title: 'Limited Parking in City Centre',
-        description: `${property.address || 'This property'} is in a city centre location where allocated parking is scarce. Lack of parking can reduce resale appeal and may cost £1,500-3,000/yr for a nearby space.`,
-        impact: 2500,
-      },
-      {
-        title: 'Potential Management Company Issues',
-        description:
-          'Leasehold flats in large developments can face management company disputes. Request the last 3 years of service charge accounts and check for any planned major works.',
-        impact: 3000,
-      },
-    ],
-    positives: [
-      {
-        title: 'Modern Build with NHBC Warranty',
-        description: `Built in ${property.yearBuilt || 2019}, this property likely still has NHBC warranty coverage (10 years from completion). This protects against structural defects and reduces risk.`,
-        impact: 12000,
-      },
-      {
-        title: 'Prime City Centre Location',
-        description: `${property.postcode || 'M3'} is a high-demand area with strong rental yields (5-6%) and consistent capital appreciation. Proximity to transport links supports long-term value.`,
-        impact: 20000,
-      },
-      {
-        title: 'Good Size for Property Type',
-        description: `At ${property.sizeSqm || 85}sqm, this ${property.bedrooms || 2}-bed ${property.propertyType || 'flat'} is above average size for the area. Larger units command premium prices.`,
-        impact: 8000,
-      },
-      {
-        title: '999-Year Lease',
-        description:
-          'With 999 years remaining, the lease length is effectively equivalent to freehold. No lease extension costs will be needed.',
-        impact: 10000,
-      },
-    ],
+    red_flags: redFlags.slice(0, 3),
+    warnings: warnings.slice(0, 3),
+    positives: positives.slice(0, 4),
   });
 });
 
