@@ -1326,7 +1326,7 @@ app.post('/api/analyze', rateLimit, async (req, res) => {
 
 Today's date: ${new Date().toISOString().slice(0, 10)}. Use this when calculating how recently a sale occurred.
 
-Your task: determine the fair market value of this property, then advise the buyer on negotiation strategy. You do NOT know the asking price — value it independently.${personaBlock}
+Your task: determine the REALISTIC fair market value of this property, then advise the buyer on negotiation strategy. You do NOT know the asking price — value it independently. Be conservative — overvaluation harms buyers. Anchor your valuation firmly to what comparable properties actually sold for, not to regional averages or aspirational pricing.${personaBlock}
 
 Property Details:
 - Address: ${property.address}, ${property.postcode}
@@ -1357,14 +1357,16 @@ Use this to contextualise whether the local market is rising, flat or falling. F
 - Recent applications:
 ${areaData.planning.recent.map(a => `  - ${a.description} (${a.status})`).join('\n')}
 Note: Major nearby developments can affect property value positively (regeneration) or negatively (construction disruption, oversupply). Factor this into warnings or positives.\n` : ''}
-VALUATION METHODOLOGY:
+VALUATION METHODOLOGY — STRICT RULES:
 1. ${comparables.length > 0
-      ? 'USE THE REAL COMPARABLE SALES DATA ABOVE as your primary evidence. Identify the most similar properties and derive your valuation from their sold prices.'
+      ? 'Your valuation MUST be anchored to the REAL Land Registry comparable sales above. These are actual transaction prices — they are ground truth. Compute the average and median sold price of the most similar properties (same type, same postcode) and use that as your starting point.'
       : 'No Land Registry data was available for this postcode. Use your knowledge of UK property prices for this area to estimate.'}
-2. Calculate a £/sqm rate based on the comparable sales data (or your knowledge if no data).
-3. Apply adjustments for: number of bedrooms, year built, tenure, condition, lease length, service charges.
-4. Your valuation MUST be derived from evidence, not guesswork.
-5. Confidence: 5-10% for well-evidenced valuations, 10-20% if limited data.
+2. Calculate a £/sqm rate from the comparable sales. This is your PRIMARY valuation driver.
+3. Apply SMALL adjustments only for: number of bedrooms, year built, tenure, condition, lease length, service charges. Individual adjustments should rarely exceed ±5%.
+4. HPI regional averages and area data are CONTEXT ONLY — use them to sanity-check, NOT to override comparable evidence. Regional averages cover wide areas and are often higher than local reality.
+5. CRITICAL: Do NOT inflate your valuation above the comparable evidence. If your valuation is more than 15% above the average comparable sale price, you are almost certainly wrong. The market price is what buyers actually paid, not what indices suggest.
+6. Your valuation MUST be derived from evidence, not guesswork. When in doubt, stay closer to the comparable average rather than drifting upward.
+7. Confidence: 5-10% for well-evidenced valuations, 10-20% if limited data.
 
 NEGOTIATION STRATEGY:
 - Suggest an offer range (low = aggressive but justified, high = fair market)
