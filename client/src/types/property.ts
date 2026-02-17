@@ -87,11 +87,26 @@ export interface PlanningData {
 }
 
 export interface AreaData {
-  epcSummary?: { averageRating: string; averageFloorArea: number; totalCerts: number };
+  epcSummary?: {
+    averageRating: string;
+    averageFloorArea: number;
+    totalCerts: number;
+    commonHeating?: string;
+    averageEnergyCost?: number;
+    commonPropertyType?: string;
+  };
   crimeRate?: { total: number; topCategory: string; level: string };
   floodRisk?: FloodRiskData;
   housePriceIndex?: HousePriceIndexData;
   planning?: PlanningData;
+  deprivation?: {
+    imdRank: number;
+    imdDecile: number;
+    incomeRank?: number;
+    educationRank?: number;
+    crimeRank?: number;
+    lsoa: string;
+  };
 }
 
 export interface AnalysisResult {

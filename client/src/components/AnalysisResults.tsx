@@ -522,7 +522,7 @@ export default function AnalysisResults({ result, property }: Props) {
       )}
 
       {/* Area data */}
-      {result.area_data && (result.area_data.epcSummary || result.area_data.crimeRate || result.area_data.floodRisk || result.area_data.housePriceIndex || result.area_data.planning) && (
+      {result.area_data && (result.area_data.epcSummary || result.area_data.crimeRate || result.area_data.floodRisk || result.area_data.housePriceIndex || result.area_data.planning || result.area_data.deprivation) && (
         <div className="bg-th-card border border-th-border rounded-2xl p-5">
           <h3 className="text-th-heading font-semibold text-sm mb-3">Area Intelligence</h3>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -546,6 +546,28 @@ export default function AnalysisResults({ result, property }: Props) {
                     <p className="text-th-muted text-[10px]">Certificates</p>
                   </div>
                 </div>
+                {(result.area_data.epcSummary.commonHeating || result.area_data.epcSummary.averageEnergyCost || result.area_data.epcSummary.commonPropertyType) && (
+                  <div className="mt-2 pt-2 border-t border-th-border grid grid-cols-3 gap-2 text-center">
+                    {result.area_data.epcSummary.commonPropertyType && (
+                      <div>
+                        <p className="text-th-heading text-[11px] font-semibold">{result.area_data.epcSummary.commonPropertyType}</p>
+                        <p className="text-th-faint text-[9px]">Common type</p>
+                      </div>
+                    )}
+                    {result.area_data.epcSummary.commonHeating && (
+                      <div>
+                        <p className="text-th-heading text-[11px] font-semibold capitalize">{result.area_data.epcSummary.commonHeating}</p>
+                        <p className="text-th-faint text-[9px]">Heating fuel</p>
+                      </div>
+                    )}
+                    {result.area_data.epcSummary.averageEnergyCost && (
+                      <div>
+                        <p className="text-th-heading text-[11px] font-semibold">£{result.area_data.epcSummary.averageEnergyCost.toLocaleString()}/yr</p>
+                        <p className="text-th-faint text-[9px]">Avg energy cost</p>
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
             )}
             {result.area_data.crimeRate && (
@@ -572,6 +594,38 @@ export default function AnalysisResults({ result, property }: Props) {
                   <div>
                     <p className="text-th-heading text-sm font-bold capitalize">{result.area_data.crimeRate.topCategory}</p>
                     <p className="text-th-muted text-[10px]">Top category</p>
+                  </div>
+                </div>
+              </div>
+            )}
+            {result.area_data.deprivation && (
+              <div className="bg-th-input/50 rounded-xl p-3">
+                <div className="flex items-center gap-2 mb-2">
+                  <span className={`w-2 h-2 rounded-full flex-shrink-0 ${
+                    result.area_data.deprivation.imdDecile >= 8 ? 'bg-cyan' :
+                    result.area_data.deprivation.imdDecile >= 4 ? 'bg-gold' : 'bg-pe-red'
+                  }`} />
+                  <p className="text-th-secondary text-[10px] uppercase tracking-wider font-medium">Deprivation Index</p>
+                  <span className="text-th-faint text-[9px] ml-auto">IMD 2019</span>
+                </div>
+                <div className="grid grid-cols-3 gap-2 text-center">
+                  <div>
+                    <p className={`text-sm font-bold ${
+                      result.area_data.deprivation.imdDecile >= 8 ? 'text-cyan' :
+                      result.area_data.deprivation.imdDecile >= 4 ? 'text-gold' : 'text-pe-red'
+                    }`}>Decile {result.area_data.deprivation.imdDecile}</p>
+                    <p className="text-th-muted text-[10px]">{
+                      result.area_data.deprivation.imdDecile >= 8 ? 'Least deprived' :
+                      result.area_data.deprivation.imdDecile >= 4 ? 'Mid-range' : 'Most deprived'
+                    }</p>
+                  </div>
+                  <div>
+                    <p className="text-th-heading text-sm font-bold">{result.area_data.deprivation.imdRank.toLocaleString()}</p>
+                    <p className="text-th-muted text-[10px]">of 32,844</p>
+                  </div>
+                  <div>
+                    <p className="text-th-heading text-[11px] font-semibold truncate">{result.area_data.deprivation.lsoa}</p>
+                    <p className="text-th-muted text-[10px]">LSOA</p>
                   </div>
                 </div>
               </div>

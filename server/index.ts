@@ -192,11 +192,26 @@ interface PlanningData {
 }
 
 interface AreaData {
-  epcSummary?: { averageRating: string; averageFloorArea: number; totalCerts: number };
+  epcSummary?: {
+    averageRating: string;
+    averageFloorArea: number;
+    totalCerts: number;
+    commonHeating?: string;
+    averageEnergyCost?: number;
+    commonPropertyType?: string;
+  };
   crimeRate?: { total: number; topCategory: string; level: string };
   floodRisk?: FloodRiskData;
   housePriceIndex?: HousePriceIndexData;
   planning?: PlanningData;
+  deprivation?: {
+    imdRank: number;        // 1 = most deprived, 32,844 = least
+    imdDecile: number;      // 1-10 (1 = most deprived 10%)
+    incomeRank?: number;
+    educationRank?: number;
+    crimeRank?: number;
+    lsoa: string;
+  };
 }
 
 // Haversine distance in miles between two lat/lng points
@@ -209,8 +224,8 @@ function haversineDistance(lat1: number, lon1: number, lat2: number, lon2: numbe
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 }
 
-// Look up lat/lng and admin district for a postcode via postcodes.io
-async function getPostcodeLocation(postcode: string): Promise<{ lat: number; lng: number; adminDistrict?: string } | null> {
+// Look up lat/lng, admin district, and LSOA for a postcode via postcodes.io
+async function getPostcodeLocation(postcode: string): Promise<{ lat: number; lng: number; adminDistrict?: string; lsoa?: string } | null> {
   try {
     const encoded = encodeURIComponent(postcode.trim());
     const res = await fetch(`https://api.postcodes.io/postcodes/${encoded}`, { signal: AbortSignal.timeout(3000) });
@@ -220,6 +235,7 @@ async function getPostcodeLocation(postcode: string): Promise<{ lat: number; lng
         lat: data.result.latitude,
         lng: data.result.longitude,
         adminDistrict: data.result.admin_district || undefined,
+        lsoa: data.result.lsoa || undefined,
       };
     }
   } catch {}
@@ -227,8 +243,19 @@ async function getPostcodeLocation(postcode: string): Promise<{ lat: number; lng
 }
 
 // Fetch EPC data for a postcode from the open EPC API (opendatacommunities.org)
-async function fetchEpcData(postcode: string): Promise<Map<string, { rating: string; floorArea: number }>> {
-  const results = new Map<string, { rating: string; floorArea: number }>();
+interface EpcEntry {
+  rating: string;
+  floorArea: number;
+  propertyType?: string;       // e.g. "House", "Flat", "Bungalow", "Maisonette"
+  builtForm?: string;          // e.g. "Detached", "Semi-Detached", "Mid-Terrace"
+  constructionYear?: string;   // e.g. "2007" or "England and Wales: 1967-1975"
+  heatingType?: string;        // e.g. "mains gas"
+  potentialRating?: string;    // e.g. "B"
+  energyCost?: number;         // estimated annual energy cost (£)
+}
+
+async function fetchEpcData(postcode: string): Promise<Map<string, EpcEntry>> {
+  const results = new Map<string, EpcEntry>();
   try {
     const encoded = encodeURIComponent(postcode.trim());
     const res = await fetch(
@@ -244,9 +271,21 @@ async function fetchEpcData(postcode: string): Promise<Map<string, { rating: str
     for (const row of rows) {
       const addr = (row.address || '').toUpperCase().trim();
       if (addr && row['current-energy-rating']) {
+        // Parse energy costs — EPC has three cost fields we can sum
+        const heatCost = parseFloat(row['heating-cost-current']) || 0;
+        const hotWaterCost = parseFloat(row['hot-water-cost-current']) || 0;
+        const lightCost = parseFloat(row['lighting-cost-current']) || 0;
+        const totalEnergyCost = heatCost + hotWaterCost + lightCost;
+
         results.set(addr, {
           rating: row['current-energy-rating'],
           floorArea: parseFloat(row['total-floor-area']) || 0,
+          propertyType: row['property-type'] || undefined,
+          builtForm: row['built-form'] || undefined,
+          constructionYear: row['construction-age-band'] || undefined,
+          heatingType: row['main-fuel'] || undefined,
+          potentialRating: row['potential-energy-rating'] || undefined,
+          energyCost: totalEnergyCost > 0 ? Math.round(totalEnergyCost) : undefined,
         });
       }
     }
@@ -257,7 +296,7 @@ async function fetchEpcData(postcode: string): Promise<Map<string, { rating: str
 }
 
 // Summarise EPC data for the area
-function summariseEpc(epcData: Map<string, { rating: string; floorArea: number }>): AreaData['epcSummary'] | undefined {
+function summariseEpc(epcData: Map<string, EpcEntry>): AreaData['epcSummary'] | undefined {
   if (epcData.size === 0) return undefined;
   const entries = Array.from(epcData.values());
   const areas = entries.filter(e => e.floorArea > 0).map(e => e.floorArea);
@@ -268,11 +307,37 @@ function summariseEpc(epcData: Map<string, { rating: string; floorArea: number }
     ratingCounts[e.rating] = (ratingCounts[e.rating] || 0) + 1;
   }
   const avgRating = Object.entries(ratingCounts).sort((a, b) => b[1] - a[1])[0]?.[0] || 'Unknown';
-  return { averageRating: avgRating, averageFloorArea: avgArea, totalCerts: entries.length };
+
+  // Most common heating fuel
+  const fuelCounts: Record<string, number> = {};
+  for (const e of entries) {
+    if (e.heatingType) fuelCounts[e.heatingType] = (fuelCounts[e.heatingType] || 0) + 1;
+  }
+  const commonHeating = Object.entries(fuelCounts).sort((a, b) => b[1] - a[1])[0]?.[0];
+
+  // Average energy cost
+  const costs = entries.filter(e => e.energyCost && e.energyCost > 0).map(e => e.energyCost!);
+  const avgEnergyCost = costs.length > 0 ? Math.round(costs.reduce((a, b) => a + b, 0) / costs.length) : undefined;
+
+  // Most common property type
+  const typeCounts: Record<string, number> = {};
+  for (const e of entries) {
+    if (e.propertyType) typeCounts[e.propertyType] = (typeCounts[e.propertyType] || 0) + 1;
+  }
+  const commonPropertyType = Object.entries(typeCounts).sort((a, b) => b[1] - a[1])[0]?.[0];
+
+  return {
+    averageRating: avgRating,
+    averageFloorArea: avgArea,
+    totalCerts: entries.length,
+    commonHeating,
+    averageEnergyCost: avgEnergyCost,
+    commonPropertyType,
+  };
 }
 
 // Enrich comparables with EPC data (floor area, energy rating, £/sqm)
-function enrichWithEpc(sales: ComparableSale[], epcData: Map<string, { rating: string; floorArea: number }>): ComparableSale[] {
+function enrichWithEpc(sales: ComparableSale[], epcData: Map<string, EpcEntry>): ComparableSale[] {
   if (epcData.size === 0) return sales;
   return sales.map(s => {
     const addr = s.address.toUpperCase().trim();
@@ -303,8 +368,12 @@ function enrichWithEpc(sales: ComparableSale[], epcData: Map<string, { rating: s
 // Fetch crime data from Police API for a location
 async function fetchCrimeData(lat: number, lng: number): Promise<AreaData['crimeRate'] | undefined> {
   try {
+    // Use 2 months ago (Police UK data has ~2 month lag)
+    const d = new Date();
+    d.setMonth(d.getMonth() - 2);
+    const crimeDate = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
     const res = await fetch(
-      `https://data.police.uk/api/crimes-street/all-crime?lat=${lat}&lng=${lng}&date=2024-06`,
+      `https://data.police.uk/api/crimes-street/all-crime?lat=${lat}&lng=${lng}&date=${crimeDate}`,
       { signal: AbortSignal.timeout(5000) }
     );
     if (!res.ok) return undefined;
@@ -527,6 +596,40 @@ async function fetchMedianEarnings(adminDistrict: string): Promise<number | unde
     return Math.round(val * 52);
   } catch (err: any) {
     console.error('NOMIS ASHE API failed:', err?.message);
+  }
+  return undefined;
+}
+
+// Fetch Index of Multiple Deprivation (IMD) for an LSOA from GOV.UK Open Data
+async function fetchImdData(lsoa: string): Promise<AreaData['deprivation'] | undefined> {
+  try {
+    // The GOV.UK IMD API provides deprivation indices by LSOA code
+    // We use the OpenDataCommunities SPARQL-like REST API
+    const encoded = encodeURIComponent(lsoa.trim());
+    const res = await fetch(
+      `https://services1.arcgis.com/ESMARspQHYMw9BZ9/arcgis/rest/services/IMD_2019/FeatureServer/0/query?where=lsoa11nm%3D%27${encoded}%27&outFields=IMDRank0,IMDDec0,IncRank,EduSkRank,CriRank,lsoa11nm&f=json`,
+      { signal: AbortSignal.timeout(5000) }
+    );
+    if (!res.ok) return undefined;
+    const data = await res.json() as any;
+    const features = data?.features;
+    if (!features || features.length === 0) return undefined;
+
+    const attrs = features[0].attributes;
+    const imdRank = attrs.IMDRank0 || attrs.IMDRank;
+    const imdDecile = attrs.IMDDec0 || attrs.IMDDec;
+    if (!imdRank) return undefined;
+
+    return {
+      imdRank,
+      imdDecile: imdDecile || Math.ceil((imdRank / 32844) * 10),
+      incomeRank: attrs.IncRank || undefined,
+      educationRank: attrs.EduSkRank || undefined,
+      crimeRank: attrs.CriRank || undefined,
+      lsoa,
+    };
+  } catch (err: any) {
+    console.error('IMD API failed:', err?.message);
   }
   return undefined;
 }
@@ -1128,12 +1231,13 @@ app.post('/api/analyze', rateLimit, async (req, res) => {
       }));
     }
 
-    // Fetch crime, flood, HPI, planning, and earnings data in parallel (non-blocking)
+    // Fetch crime, flood, HPI, planning, earnings, and IMD data in parallel (non-blocking)
     let crimeData: AreaData['crimeRate'] | undefined;
     let floodData: FloodRiskData | undefined;
     let hpiData: HousePriceIndexData | undefined;
     let planningData: PlanningData | undefined;
     let medianEarnings: number | undefined;
+    let imdData: AreaData['deprivation'] | undefined;
 
     const parallelFetches: Promise<any>[] = [
       fetchHousePriceIndex(property.postcode).then(r => { hpiData = r; }),
@@ -1147,6 +1251,11 @@ app.post('/api/analyze', rateLimit, async (req, res) => {
       if (subjectLocation.adminDistrict) {
         parallelFetches.push(
           fetchMedianEarnings(subjectLocation.adminDistrict).then(r => { medianEarnings = r; }),
+        );
+      }
+      if (subjectLocation.lsoa) {
+        parallelFetches.push(
+          fetchImdData(subjectLocation.lsoa).then(r => { imdData = r; }),
         );
       }
     }
@@ -1163,6 +1272,7 @@ app.post('/api/analyze', rateLimit, async (req, res) => {
     if (floodData) dataSources.push('Environment Agency');
     if (hpiData) dataSources.push('UK House Price Index');
     if (planningData) dataSources.push('PlanIt Planning Data');
+    if (imdData) dataSources.push('MHCLG IMD 2019');
 
     // Enrich: similarity scores
     const includedForScoring = comparables.filter(c => !c.excluded);
@@ -1181,6 +1291,7 @@ app.post('/api/analyze', rateLimit, async (req, res) => {
       floodRisk: floodData,
       housePriceIndex: hpiData,
       planning: planningData,
+      deprivation: imdData,
     };
 
     dataSources.push('AI Analysis');
@@ -1221,7 +1332,19 @@ Property Details:
 - Year Built: ${property.yearBuilt}
 - Tenure: ${property.tenure}${leaseholdInfo}
 ${comparablesText}
-${areaData.epcSummary ? `\nAREA EPC DATA (Energy Performance Certificates):\n- Average energy rating: ${areaData.epcSummary.averageRating}\n- Average floor area: ${areaData.epcSummary.averageFloorArea}sqm\n- ${areaData.epcSummary.totalCerts} certificates in this postcode\n` : ''}${areaData.crimeRate ? `\nAREA CRIME DATA (Police UK):\n- ${areaData.crimeRate.total} crimes reported nearby (last month)\n- Most common: ${areaData.crimeRate.topCategory}\n- Crime level: ${areaData.crimeRate.level}\n` : ''}${areaData.floodRisk ? `\nFLOOD RISK DATA (Environment Agency):\n- Flood risk level: ${areaData.floodRisk.riskLevel}\n- Active warnings within 5km: ${areaData.floodRisk.activeWarnings}\n- ${areaData.floodRisk.description}${areaData.floodRisk.nearestStation ? `\n- Nearest monitoring station: ${areaData.floodRisk.nearestStation}` : ''}\nNote: If flood risk is Medium or High, this MUST appear in red_flags or warnings with estimated insurance/remediation cost impact.\n` : ''}${areaData.housePriceIndex ? `\nUK HOUSE PRICE INDEX (HM Land Registry + ONS):
+${areaData.epcSummary ? `\nAREA EPC DATA (Energy Performance Certificates):
+- Average energy rating: ${areaData.epcSummary.averageRating}
+- Average floor area: ${areaData.epcSummary.averageFloorArea}sqm
+- ${areaData.epcSummary.totalCerts} certificates in this postcode${areaData.epcSummary.commonPropertyType ? `\n- Most common property type: ${areaData.epcSummary.commonPropertyType}` : ''}${areaData.epcSummary.commonHeating ? `\n- Most common heating fuel: ${areaData.epcSummary.commonHeating}` : ''}${areaData.epcSummary.averageEnergyCost ? `\n- Average annual energy cost: £${areaData.epcSummary.averageEnergyCost.toLocaleString()}` : ''}
+` : ''}${areaData.deprivation ? `\nAREA DEPRIVATION (MHCLG Index of Multiple Deprivation 2019):
+- IMD rank: ${areaData.deprivation.imdRank.toLocaleString()} of 32,844 LSOAs (1 = most deprived)
+- IMD decile: ${areaData.deprivation.imdDecile} (1 = most deprived 10%, 10 = least deprived 10%)${areaData.deprivation.incomeRank ? `\n- Income rank: ${areaData.deprivation.incomeRank.toLocaleString()}` : ''}${areaData.deprivation.educationRank ? `\n- Education rank: ${areaData.deprivation.educationRank.toLocaleString()}` : ''}${areaData.deprivation.crimeRank ? `\n- Crime rank: ${areaData.deprivation.crimeRank.toLocaleString()}` : ''}
+Note: Higher deprivation (lower decile) correlates with lower property values. A low IMD decile (1-3) is a risk factor; a high decile (8-10) is a positive.
+` : ''}${areaData.crimeRate ? `\nAREA CRIME DATA (Police UK):
+- ${areaData.crimeRate.total} crimes reported nearby (last month)
+- Most common: ${areaData.crimeRate.topCategory}
+- Crime level: ${areaData.crimeRate.level}
+` : ''}${areaData.floodRisk ? `\nFLOOD RISK DATA (Environment Agency):\n- Flood risk level: ${areaData.floodRisk.riskLevel}\n- Active warnings within 5km: ${areaData.floodRisk.activeWarnings}\n- ${areaData.floodRisk.description}${areaData.floodRisk.nearestStation ? `\n- Nearest monitoring station: ${areaData.floodRisk.nearestStation}` : ''}\nNote: If flood risk is Medium or High, this MUST appear in red_flags or warnings with estimated insurance/remediation cost impact.\n` : ''}${areaData.housePriceIndex ? `\nUK HOUSE PRICE INDEX (HM Land Registry + ONS):
 - Region: ${areaData.housePriceIndex.region}
 - Average price: £${areaData.housePriceIndex.averagePrice.toLocaleString()} (${areaData.housePriceIndex.period})
 - Annual change: ${areaData.housePriceIndex.annualChange > 0 ? '+' : ''}${areaData.housePriceIndex.annualChange}%
@@ -1437,12 +1560,13 @@ app.post('/api/demo', rateLimit, async (req, res) => {
     distance: Math.round((0.1 + (i * 0.15) % 1.5) * 10) / 10,
   }));
 
-  // Crime, Flood, HPI, Planning, and Earnings data in parallel
+  // Crime, Flood, HPI, Planning, Earnings, and IMD data in parallel
   let crimeDataDemo: AreaData['crimeRate'] | undefined;
   let floodDataDemo: FloodRiskData | undefined;
   let hpiDataDemo: HousePriceIndexData | undefined;
   let planningDataDemo: PlanningData | undefined;
   let medianEarningsDemo: number | undefined;
+  let imdDataDemo: AreaData['deprivation'] | undefined;
 
   const demoParallelFetches: Promise<any>[] = [
     fetchHousePriceIndex(property.postcode || '').then(r => { hpiDataDemo = r; }),
@@ -1456,6 +1580,11 @@ app.post('/api/demo', rateLimit, async (req, res) => {
     if (locationDemo.adminDistrict) {
       demoParallelFetches.push(
         fetchMedianEarnings(locationDemo.adminDistrict).then(r => { medianEarningsDemo = r; }),
+      );
+    }
+    if (locationDemo.lsoa) {
+      demoParallelFetches.push(
+        fetchImdData(locationDemo.lsoa).then(r => { imdDataDemo = r; }),
       );
     }
   }
@@ -1472,6 +1601,7 @@ app.post('/api/demo', rateLimit, async (req, res) => {
   if (floodDataDemo) dataSources.push('Environment Agency');
   if (hpiDataDemo) dataSources.push('UK House Price Index');
   if (planningDataDemo) dataSources.push('PlanIt Planning Data');
+  if (imdDataDemo) dataSources.push('MHCLG IMD 2019');
 
   const areaDataDemo: AreaData = {
     epcSummary: summariseEpc(epcDataDemo),
@@ -1479,6 +1609,7 @@ app.post('/api/demo', rateLimit, async (req, res) => {
     floodRisk: floodDataDemo,
     housePriceIndex: hpiDataDemo,
     planning: planningDataDemo,
+    deprivation: imdDataDemo,
   };
 
   let valuation: number;
