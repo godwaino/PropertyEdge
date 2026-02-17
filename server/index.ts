@@ -1848,13 +1848,27 @@ app.post('/api/demo', rateLimit, async (req, res) => {
 
     const avgPrice = relevantSales.reduce((a, b) => a + b.price, 0) / relevantSales.length;
 
-    // Use actual comparable floor areas (from EPC data) if available, else assume 70sqm
+    // Use actual comparable floor areas (from EPC data) if available
+    // Type-aware default avoids absurd ratios (e.g. 155sqm detached vs 70sqm default)
+    const defaultSqm: Record<string, number> = { flat: 55, terraced: 75, 'semi-detached': 85, detached: 115, bungalow: 70 };
+    const typeFallbackSqm = defaultSqm[property.propertyType || 'flat'] || 70;
     const compsWithArea = relevantSales.filter(c => c.floorArea && c.floorArea > 0);
     const avgCompSqm = compsWithArea.length >= 2
       ? compsWithArea.reduce((sum, c) => sum + c.floorArea!, 0) / compsWithArea.length
-      : 70;
-    const sizeRatio = sqm / avgCompSqm;
+      : typeFallbackSqm;
+
+    // Dampened size ratio: price doesn't scale linearly with sqm (diminishing returns)
+    // A property 50% larger than avg comps gets ~30% premium, not 50%
+    const rawSizeRatio = sqm / avgCompSqm;
+    const sizeRatio = rawSizeRatio >= 1
+      ? 1 + (rawSizeRatio - 1) * 0.6
+      : 1 - (1 - rawSizeRatio) * 0.6;
     valuation = Math.round(avgPrice * sizeRatio / 1000) * 1000;
+
+    // Hard cap: valuation can't drift more than ±30% from average comp price
+    const maxVal = Math.round(avgPrice * 1.30 / 1000) * 1000;
+    const minVal = Math.round(avgPrice * 0.70 / 1000) * 1000;
+    valuation = Math.max(minVal, Math.min(maxVal, valuation));
 
     // Adjust for year built (skip if unknown)
     if (property.yearBuilt > 0) {
