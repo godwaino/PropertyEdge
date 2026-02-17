@@ -218,7 +218,7 @@ function CompsTable({ comparables }: { comparables: ComparableSale[] }) {
                 <td className={`py-2 pr-3 font-medium ${c.excluded ? 'text-th-muted line-through' : 'text-th-heading'}`}>
                   {fmt(c.price)}
                 </td>
-                <td className="py-2 pr-3">{c.date}</td>
+                <td className="py-2 pr-3">{new Date(c.date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}</td>
                 <td className="py-2 pr-3 max-w-[180px] truncate">{c.address}</td>
                 <td className="py-2 pr-3 capitalize">{c.propertyType}</td>
                 <td className="py-2 pr-3 text-center">

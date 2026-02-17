@@ -950,8 +950,12 @@ function formatComparables(sales: ComparableSale[], propertyType: string): strin
   const sameType = included.filter(s => s.propertyType.includes(propertyType.split('-')[0]));
   const relevantSales = sameType.length >= 3 ? sameType : included;
 
+  const now = new Date();
   const lines = relevantSales.slice(0, 15).map(s => {
-    let line = `  - £${s.price.toLocaleString()} | ${s.date} | ${s.address} | ${s.propertyType}`;
+    const saleDate = new Date(s.date);
+    const monthsAgo = Math.round((now.getTime() - saleDate.getTime()) / (1000 * 60 * 60 * 24 * 30));
+    const ukDate = saleDate.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+    let line = `  - £${s.price.toLocaleString()} | ${ukDate} (${monthsAgo}mo ago) | ${s.address} | ${s.propertyType}`;
     if (s.newBuild) line += ' (new build)';
     if (s.floorArea) line += ` | ${s.floorArea}sqm (£${s.pricePsm}/sqm)`;
     if (s.epcRating) line += ` | EPC ${s.epcRating}`;
@@ -963,7 +967,8 @@ function formatComparables(sales: ComparableSale[], propertyType: string): strin
     lines.push('');
     lines.push('  EXCLUDED OUTLIERS (not used in valuation):');
     for (const s of excluded) {
-      lines.push(`  - £${s.price.toLocaleString()} | ${s.date} | ${s.address} | Reason: ${s.excludeReason}`);
+      const exDate = new Date(s.date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+      lines.push(`  - £${s.price.toLocaleString()} | ${exDate} | ${s.address} | Reason: ${s.excludeReason}`);
     }
   }
 
