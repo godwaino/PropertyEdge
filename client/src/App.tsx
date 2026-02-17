@@ -115,6 +115,16 @@ export default function App() {
     }
   }, [result, isLoading]);
 
+  const handleReset = () => {
+    setResult(null);
+    setLastProperty(null);
+    setError(null);
+    setIsLoading(false);
+    setFormVisible(false);
+    setAutoOpenImport(false);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
   const showHero = !result && !isLoading;
 
   return (
@@ -125,7 +135,7 @@ export default function App() {
       </div>
 
       <div className="relative z-10 pb-16">
-        <Header />
+        <Header onReset={handleReset} />
 
         <div className="max-w-4xl mx-auto px-4 mb-2 flex justify-end items-center gap-2">
           {demoMode && !apiKeyConfigured && (
@@ -189,6 +199,14 @@ export default function App() {
           {result && lastProperty && !isLoading && (
             <div id="results">
               <AnalysisResults result={result} property={lastProperty} />
+              <div className="w-full max-w-4xl mx-auto mt-6 text-center">
+                <button
+                  onClick={handleReset}
+                  className="px-6 py-2.5 rounded-xl border border-gray-700 text-gray-400 hover:text-cyan hover:border-cyan/50 transition-all text-sm"
+                >
+                  Analyse another property
+                </button>
+              </div>
             </div>
           )}
         </main>
