@@ -132,10 +132,30 @@ export default function Hero({ onAnalyseClick, onExtractListing, visible, isExtr
         ))}
       </div>
 
+      {/* Data sources strip */}
+      <div className="mt-6 max-w-3xl mx-auto">
+        <p className="text-gray-600 text-[10px] uppercase tracking-wider mb-2">Data sources</p>
+        <div className="flex flex-wrap justify-center gap-3">
+          {[
+            { name: 'HM Land Registry', desc: 'Sold prices' },
+            { name: 'EPC Register', desc: 'Energy & floor area' },
+            { name: 'Police UK', desc: 'Crime data' },
+            { name: 'postcodes.io', desc: 'Geolocation' },
+            { name: 'AI Analysis', desc: 'Valuation model' },
+          ].map((s) => (
+            <div key={s.name} className="flex items-center gap-1.5 bg-navy-card/40 border border-gray-800 rounded-lg px-2.5 py-1.5">
+              <div className="w-1.5 h-1.5 rounded-full bg-cyan/60 flex-shrink-0" />
+              <div className="text-left">
+                <p className="text-gray-300 text-[10px] font-medium leading-tight">{s.name}</p>
+                <p className="text-gray-600 text-[9px] leading-tight">{s.desc}</p>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+
       {/* Trust cues */}
-      <div className="mt-5 flex flex-wrap justify-center gap-4 text-[11px] text-gray-500">
-        <span>Powered by HM Land Registry, postcodes.io and AI analysis</span>
-        <span>&middot;</span>
+      <div className="mt-3 flex flex-wrap justify-center gap-4 text-[11px] text-gray-500">
         <span>No account needed</span>
         <span>&middot;</span>
         <span>Searches not stored</span>

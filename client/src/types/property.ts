@@ -27,6 +27,9 @@ export interface ComparableSale {
   similarity?: number;     // 0-100 score
   excluded?: boolean;      // true if outlier
   excludeReason?: string;  // e.g. "Extreme outlier (farm)"
+  epcRating?: string;      // e.g. "C"
+  floorArea?: number;      // sqm from EPC
+  pricePsm?: number;       // £/sqm derived
 }
 
 export interface NegotiationData {
@@ -35,6 +38,11 @@ export interface NegotiationData {
   walk_away: number;
   reasoning: string;
   negotiation_points?: string[];  // Top 3 evidence-backed talking points
+}
+
+export interface AreaData {
+  epcSummary?: { averageRating: string; averageFloorArea: number; totalCerts: number };
+  crimeRate?: { total: number; topCategory: string; level: string };
 }
 
 export interface AnalysisResult {
@@ -53,4 +61,6 @@ export interface AnalysisResult {
   red_flags: AnalysisItem[];
   warnings: AnalysisItem[];
   positives: AnalysisItem[];
+  area_data?: AreaData;
+  data_sources?: string[];  // list of sources used in this analysis
 }

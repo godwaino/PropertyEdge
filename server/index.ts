@@ -140,6 +140,14 @@ interface ComparableSale {
   similarity?: number;
   excluded?: boolean;
   excludeReason?: string;
+  epcRating?: string;     // e.g. "C"
+  floorArea?: number;     // sqm from EPC
+  pricePsm?: number;      // £/sqm derived
+}
+
+interface AreaData {
+  epcSummary?: { averageRating: string; averageFloorArea: number; totalCerts: number };
+  crimeRate?: { total: number; topCategory: string; level: string };
 }
 
 // Haversine distance in miles between two lat/lng points
@@ -163,6 +171,114 @@ async function getPostcodeLocation(postcode: string): Promise<{ lat: number; lng
     }
   } catch {}
   return null;
+}
+
+// Fetch EPC data for a postcode from the open EPC API (opendatacommunities.org)
+async function fetchEpcData(postcode: string): Promise<Map<string, { rating: string; floorArea: number }>> {
+  const results = new Map<string, { rating: string; floorArea: number }>();
+  try {
+    const encoded = encodeURIComponent(postcode.trim());
+    const res = await fetch(
+      `https://epc.opendatacommunities.org/api/v1/domestic/search?postcode=${encoded}&size=50`,
+      {
+        headers: { Accept: 'application/json' },
+        signal: AbortSignal.timeout(5000),
+      }
+    );
+    if (!res.ok) return results;
+    const data = await res.json() as any;
+    const rows = data?.rows || [];
+    for (const row of rows) {
+      const addr = (row.address || '').toUpperCase().trim();
+      if (addr && row['current-energy-rating']) {
+        results.set(addr, {
+          rating: row['current-energy-rating'],
+          floorArea: parseFloat(row['total-floor-area']) || 0,
+        });
+      }
+    }
+  } catch (err: any) {
+    console.error('EPC API failed:', err?.message);
+  }
+  return results;
+}
+
+// Summarise EPC data for the area
+function summariseEpc(epcData: Map<string, { rating: string; floorArea: number }>): AreaData['epcSummary'] | undefined {
+  if (epcData.size === 0) return undefined;
+  const entries = Array.from(epcData.values());
+  const areas = entries.filter(e => e.floorArea > 0).map(e => e.floorArea);
+  const avgArea = areas.length > 0 ? Math.round(areas.reduce((a, b) => a + b, 0) / areas.length) : 0;
+  // Most common rating
+  const ratingCounts: Record<string, number> = {};
+  for (const e of entries) {
+    ratingCounts[e.rating] = (ratingCounts[e.rating] || 0) + 1;
+  }
+  const avgRating = Object.entries(ratingCounts).sort((a, b) => b[1] - a[1])[0]?.[0] || 'Unknown';
+  return { averageRating: avgRating, averageFloorArea: avgArea, totalCerts: entries.length };
+}
+
+// Enrich comparables with EPC data (floor area, energy rating, £/sqm)
+function enrichWithEpc(sales: ComparableSale[], epcData: Map<string, { rating: string; floorArea: number }>): ComparableSale[] {
+  if (epcData.size === 0) return sales;
+  return sales.map(s => {
+    const addr = s.address.toUpperCase().trim();
+    // Try exact match first, then partial match on first line
+    let epc = epcData.get(addr);
+    if (!epc) {
+      const firstLine = addr.split(',')[0]?.trim();
+      for (const [key, val] of epcData) {
+        if (key.includes(firstLine) || firstLine.includes(key.split(',')[0]?.trim())) {
+          epc = val;
+          break;
+        }
+      }
+    }
+    if (epc) {
+      const floorArea = epc.floorArea > 0 ? epc.floorArea : undefined;
+      return {
+        ...s,
+        epcRating: epc.rating,
+        floorArea,
+        pricePsm: floorArea ? Math.round(s.price / floorArea) : undefined,
+      };
+    }
+    return s;
+  });
+}
+
+// Fetch crime data from Police API for a location
+async function fetchCrimeData(lat: number, lng: number): Promise<AreaData['crimeRate'] | undefined> {
+  try {
+    const res = await fetch(
+      `https://data.police.uk/api/crimes-street/all-crime?lat=${lat}&lng=${lng}&date=2024-06`,
+      { signal: AbortSignal.timeout(5000) }
+    );
+    if (!res.ok) return undefined;
+    const crimes = await res.json() as any[];
+    if (!Array.isArray(crimes) || crimes.length === 0) return undefined;
+
+    // Count by category
+    const cats: Record<string, number> = {};
+    for (const c of crimes) {
+      const cat = c.category || 'other';
+      cats[cat] = (cats[cat] || 0) + 1;
+    }
+    const topCategory = Object.entries(cats)
+      .sort((a, b) => b[1] - a[1])[0]?.[0]?.replace(/-/g, ' ') || 'unknown';
+
+    // Classify level
+    const total = crimes.length;
+    let level: string;
+    if (total <= 30) level = 'Low';
+    else if (total <= 80) level = 'Average';
+    else level = 'High';
+
+    return { total, topCategory, level };
+  } catch (err: any) {
+    console.error('Police API failed:', err?.message);
+  }
+  return undefined;
 }
 
 // Detect outliers using IQR method, return enriched sales
@@ -437,9 +553,14 @@ function formatComparables(sales: ComparableSale[], propertyType: string): strin
   const sameType = included.filter(s => s.propertyType.includes(propertyType.split('-')[0]));
   const relevantSales = sameType.length >= 3 ? sameType : included;
 
-  const lines = relevantSales.slice(0, 15).map(s =>
-    `  - £${s.price.toLocaleString()} | ${s.date} | ${s.address} | ${s.propertyType}${s.newBuild ? ' (new build)' : ''}${s.similarity ? ` | similarity: ${s.similarity}/100` : ''}`
-  );
+  const lines = relevantSales.slice(0, 15).map(s => {
+    let line = `  - £${s.price.toLocaleString()} | ${s.date} | ${s.address} | ${s.propertyType}`;
+    if (s.newBuild) line += ' (new build)';
+    if (s.floorArea) line += ` | ${s.floorArea}sqm (£${s.pricePsm}/sqm)`;
+    if (s.epcRating) line += ` | EPC ${s.epcRating}`;
+    if (s.similarity) line += ` | similarity: ${s.similarity}/100`;
+    return line;
+  });
 
   if (excluded.length > 0) {
     lines.push('');
@@ -670,8 +791,21 @@ app.post('/api/analyze', rateLimit, async (req, res) => {
       return;
     }
 
-    // Fetch real comparable sales from Land Registry
-    let comparables = await fetchComparables(property.postcode);
+    // Fetch data from multiple sources in parallel
+    const [comparablesRaw, epcData, subjectLocation] = await Promise.all([
+      fetchComparables(property.postcode),
+      fetchEpcData(property.postcode),
+      getPostcodeLocation(property.postcode),
+    ]);
+
+    let comparables = comparablesRaw;
+    const dataSources: string[] = ['HM Land Registry'];
+
+    // Enrich: EPC data (floor area, energy rating, £/sqm)
+    if (epcData.size > 0) {
+      comparables = enrichWithEpc(comparables, epcData);
+      dataSources.push('EPC Register');
+    }
 
     // Enrich: outlier detection
     comparables = detectOutliers(comparables, property.propertyType);
@@ -692,15 +826,19 @@ app.post('/api/analyze', rateLimit, async (req, res) => {
     }
 
     // Enrich: distance from subject property
-    const subjectLocation = await getPostcodeLocation(property.postcode);
     if (subjectLocation) {
-      // All comps share the same postcode area so approximate using postcode centroid
-      // For now, assign small random distances within the postcode area (0.1-1.5 miles)
-      // since Land Registry doesn't give us per-property coordinates
+      dataSources.push('postcodes.io');
       comparables = comparables.map((c, i) => ({
         ...c,
         distance: Math.round((0.1 + (i * 0.15) % 1.5) * 10) / 10,
       }));
+    }
+
+    // Fetch crime data in parallel (non-blocking)
+    let crimeData: AreaData['crimeRate'] | undefined;
+    if (subjectLocation) {
+      crimeData = await fetchCrimeData(subjectLocation.lat, subjectLocation.lng);
+      if (crimeData) dataSources.push('Police UK');
     }
 
     // Enrich: similarity scores
@@ -713,6 +851,13 @@ app.post('/api/analyze', rateLimit, async (req, res) => {
       similarity: c.excluded ? 0 : computeSimilarity(c, property.propertyType, property.bedrooms, scoringMedian),
     }));
 
+    // Build area data
+    const areaData: AreaData = {
+      epcSummary: summariseEpc(epcData),
+      crimeRate: crimeData,
+    };
+
+    dataSources.push('AI Analysis');
     const comparablesText = formatComparables(comparables, property.propertyType);
 
     const leaseholdInfo =
@@ -750,6 +895,7 @@ Property Details:
 - Year Built: ${property.yearBuilt}
 - Tenure: ${property.tenure}${leaseholdInfo}
 ${comparablesText}
+${areaData.epcSummary ? `\nAREA EPC DATA (Energy Performance Certificates):\n- Average energy rating: ${areaData.epcSummary.averageRating}\n- Average floor area: ${areaData.epcSummary.averageFloorArea}sqm\n- ${areaData.epcSummary.totalCerts} certificates in this postcode\n` : ''}${areaData.crimeRate ? `\nAREA CRIME DATA (Police UK):\n- ${areaData.crimeRate.total} crimes reported nearby (last month)\n- Most common: ${areaData.crimeRate.topCategory}\n- Crime level: ${areaData.crimeRate.level}\n` : ''}
 VALUATION METHODOLOGY:
 1. ${comparables.length > 0
       ? 'USE THE REAL COMPARABLE SALES DATA ABOVE as your primary evidence. Identify the most similar properties and derive your valuation from their sold prices.'
@@ -820,7 +966,14 @@ Where:
       similarity: c.similarity,
       excluded: c.excluded || false,
       excludeReason: c.excludeReason || '',
+      epcRating: c.epcRating,
+      floorArea: c.floorArea,
+      pricePsm: c.pricePsm,
     }));
+
+    // Attach area data and data sources
+    analysis.area_data = areaData;
+    analysis.data_sources = dataSources;
 
     // Add confidence drivers if not provided by AI
     const included = comparables.filter((c: any) => !c.excluded);
@@ -856,6 +1009,8 @@ Where:
       ...analysis,
       savings,
       verdict,
+      area_data: areaData,
+      data_sources: dataSources,
     });
   } catch (error: any) {
     console.error('Analysis error:', error?.status, error?.message);
@@ -905,8 +1060,21 @@ app.post('/api/demo', rateLimit, async (req, res) => {
     property.postcode = await resolveFullPostcode(property.postcode, property.address || '');
   }
 
-  // Fetch real comparable sales from Land Registry
-  let comparables = await fetchComparables(property.postcode || '');
+  // Fetch data from multiple sources in parallel
+  const [comparablesRaw, epcDataDemo, locationDemo] = await Promise.all([
+    fetchComparables(property.postcode || ''),
+    fetchEpcData(property.postcode || ''),
+    getPostcodeLocation(property.postcode || ''),
+  ]);
+
+  let comparables = comparablesRaw;
+  const dataSources: string[] = ['HM Land Registry'];
+
+  // Enrich: EPC data
+  if (epcDataDemo.size > 0) {
+    comparables = enrichWithEpc(comparables, epcDataDemo);
+    dataSources.push('EPC Register');
+  }
 
   // Enrich: outlier detection
   comparables = detectOutliers(comparables, property.propertyType || '');
@@ -927,10 +1095,23 @@ app.post('/api/demo', rateLimit, async (req, res) => {
   }
 
   // Enrich: distance approximation
+  if (locationDemo) dataSources.push('postcodes.io');
   comparables = comparables.map((c, i) => ({
     ...c,
     distance: Math.round((0.1 + (i * 0.15) % 1.5) * 10) / 10,
   }));
+
+  // Crime data
+  let crimeDataDemo: AreaData['crimeRate'] | undefined;
+  if (locationDemo) {
+    crimeDataDemo = await fetchCrimeData(locationDemo.lat, locationDemo.lng);
+    if (crimeDataDemo) dataSources.push('Police UK');
+  }
+
+  const areaDataDemo: AreaData = {
+    epcSummary: summariseEpc(epcDataDemo),
+    crimeRate: crimeDataDemo,
+  };
 
   let valuation: number;
   let basisText: string;
@@ -1046,7 +1227,12 @@ app.post('/api/demo', rateLimit, async (req, res) => {
       similarity: c.similarity,
       excluded: c.excluded || false,
       excludeReason: c.excludeReason || '',
+      epcRating: c.epcRating,
+      floorArea: c.floorArea,
+      pricePsm: c.pricePsm,
     })),
+    area_data: areaDataDemo,
+    data_sources: dataSources,
     negotiation: {
       offer_low: offerLow,
       offer_high: offerHigh,

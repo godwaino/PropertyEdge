@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react';
-import { AnalysisResult, AnalysisItem, PropertyInput, ComparableSale } from '../types/property';
+import { AnalysisResult, AnalysisItem, PropertyInput, ComparableSale, AreaData } from '../types/property';
 
 interface Props {
   result: AnalysisResult;
@@ -183,6 +183,8 @@ function CompsTable({ comparables }: { comparables: ComparableSale[] }) {
               <th className="text-left py-2 pr-3">Date</th>
               <th className="text-left py-2 pr-3">Address</th>
               <th className="text-left py-2 pr-3">Type</th>
+              <th className="text-center py-2 pr-3">EPC</th>
+              <th className="text-center py-2 pr-3">£/sqm</th>
               <th className="text-center py-2 pr-3">Dist.</th>
               <th className="text-center py-2 pr-3">Match</th>
               <th className="text-left py-2">Status</th>
@@ -202,6 +204,18 @@ function CompsTable({ comparables }: { comparables: ComparableSale[] }) {
                 <td className="py-2 pr-3">{c.date}</td>
                 <td className="py-2 pr-3 max-w-[180px] truncate">{c.address}</td>
                 <td className="py-2 pr-3 capitalize">{c.propertyType}</td>
+                <td className="py-2 pr-3 text-center">
+                  {c.epcRating ? (
+                    <span className={`inline-block px-1.5 py-0.5 rounded text-[10px] font-medium ${
+                      'AB'.includes(c.epcRating) ? 'bg-cyan/10 text-cyan' :
+                      'CD'.includes(c.epcRating) ? 'bg-gold/10 text-gold' :
+                      'bg-pe-red/10 text-pe-red'
+                    }`}>{c.epcRating}</span>
+                  ) : '—'}
+                </td>
+                <td className="py-2 pr-3 text-center text-gray-400">
+                  {c.pricePsm ? `£${c.pricePsm.toLocaleString()}` : '—'}
+                </td>
                 <td className="py-2 pr-3 text-center">
                   {c.distance !== undefined ? `${c.distance}mi` : '—'}
                 </td>
@@ -496,6 +510,76 @@ export default function AnalysisResults({ result, property }: Props) {
           </button>
 
           {showComps && <CompsTable comparables={result.comparables} />}
+        </div>
+      )}
+
+      {/* Area data (EPC + Crime) */}
+      {result.area_data && (result.area_data.epcSummary || result.area_data.crimeRate) && (
+        <div className="bg-navy-card border border-gray-800 rounded-2xl p-5">
+          <h3 className="text-white font-semibold text-sm mb-3">Area Intelligence</h3>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            {result.area_data.epcSummary && (
+              <div className="bg-navy-light/50 rounded-xl p-3">
+                <div className="flex items-center gap-2 mb-2">
+                  <span className="w-2 h-2 rounded-full bg-gold flex-shrink-0" />
+                  <p className="text-gray-400 text-[10px] uppercase tracking-wider font-medium">EPC Register</p>
+                </div>
+                <div className="grid grid-cols-3 gap-2 text-center">
+                  <div>
+                    <p className="text-white text-sm font-bold">{result.area_data.epcSummary.averageRating}</p>
+                    <p className="text-gray-500 text-[10px]">Avg rating</p>
+                  </div>
+                  <div>
+                    <p className="text-white text-sm font-bold">{result.area_data.epcSummary.averageFloorArea}sqm</p>
+                    <p className="text-gray-500 text-[10px]">Avg floor area</p>
+                  </div>
+                  <div>
+                    <p className="text-white text-sm font-bold">{result.area_data.epcSummary.totalCerts}</p>
+                    <p className="text-gray-500 text-[10px]">Certificates</p>
+                  </div>
+                </div>
+              </div>
+            )}
+            {result.area_data.crimeRate && (
+              <div className="bg-navy-light/50 rounded-xl p-3">
+                <div className="flex items-center gap-2 mb-2">
+                  <span className={`w-2 h-2 rounded-full flex-shrink-0 ${
+                    result.area_data.crimeRate.level === 'Low' ? 'bg-cyan' :
+                    result.area_data.crimeRate.level === 'Average' ? 'bg-gold' : 'bg-pe-red'
+                  }`} />
+                  <p className="text-gray-400 text-[10px] uppercase tracking-wider font-medium">Police UK</p>
+                </div>
+                <div className="grid grid-cols-3 gap-2 text-center">
+                  <div>
+                    <p className={`text-sm font-bold ${
+                      result.area_data.crimeRate.level === 'Low' ? 'text-cyan' :
+                      result.area_data.crimeRate.level === 'Average' ? 'text-gold' : 'text-pe-red'
+                    }`}>{result.area_data.crimeRate.level}</p>
+                    <p className="text-gray-500 text-[10px]">Crime level</p>
+                  </div>
+                  <div>
+                    <p className="text-white text-sm font-bold">{result.area_data.crimeRate.total}</p>
+                    <p className="text-gray-500 text-[10px]">Incidents/mo</p>
+                  </div>
+                  <div>
+                    <p className="text-white text-sm font-bold capitalize">{result.area_data.crimeRate.topCategory}</p>
+                    <p className="text-gray-500 text-[10px]">Top category</p>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Data sources used */}
+      {result.data_sources && result.data_sources.length > 0 && (
+        <div className="flex flex-wrap justify-center gap-2 px-4">
+          {result.data_sources.map((src, i) => (
+            <span key={i} className="text-[10px] px-2 py-0.5 rounded-full border border-gray-800 text-gray-500 bg-navy-card/30">
+              {src}
+            </span>
+          ))}
         </div>
       )}
 
