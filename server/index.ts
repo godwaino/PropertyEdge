@@ -84,7 +84,8 @@ setInterval(() => {
 function validateProperty(body: any): { valid: boolean; error?: string } {
   if (!body || typeof body !== 'object') return { valid: false, error: 'Request body must be a JSON object' };
   if (!body.address || typeof body.address !== 'string' || body.address.length > 500) return { valid: false, error: 'Invalid address' };
-  if (!body.postcode || typeof body.postcode !== 'string' || !/^[A-Z]{1,2}\d[A-Z\d]?\s*\d[A-Z]{2}$/i.test(body.postcode.trim())) return { valid: false, error: 'Invalid UK postcode' };
+  // Accept full postcodes (SW1A 1AA) AND partial outward codes (M3, SW1A, EC2)
+  if (!body.postcode || typeof body.postcode !== 'string' || !/^[A-Z]{1,2}\d[A-Z\d]?(\s*\d[A-Z]{2})?$/i.test(body.postcode.trim())) return { valid: false, error: 'Invalid UK postcode (e.g. "M3 4LQ" or just "M3")' };
   if (typeof body.askingPrice !== 'number' || body.askingPrice < 1000 || body.askingPrice > 100_000_000) return { valid: false, error: 'Asking price must be between £1,000 and £100,000,000' };
   if (typeof body.bedrooms !== 'number' || body.bedrooms < 0 || body.bedrooms > 20) return { valid: false, error: 'Bedrooms must be 0-20' };
   if (typeof body.sizeSqm !== 'number' || body.sizeSqm < 5 || body.sizeSqm > 10000) return { valid: false, error: 'Size must be 5-10,000 sqm' };
@@ -414,6 +415,10 @@ app.post('/api/analyze', rateLimit, async (req, res) => {
 
   try {
     const property: PropertyRequest = req.body;
+
+    // Resolve partial postcodes (e.g. "M3") to full ones before analysis
+    property.postcode = await resolveFullPostcode(property.postcode, property.address);
+
     const cacheKey = propertyHash(property);
 
     // Check cache — same property details = same valuation (asking price excluded)
@@ -593,6 +598,11 @@ app.post('/api/demo', rateLimit, async (req, res) => {
   const property: PropertyRequest = req.body;
   const price = property.askingPrice || 285000;
   const sqm = property.sizeSqm || 75;
+
+  // Resolve partial postcodes before fetching comps
+  if (property.postcode) {
+    property.postcode = await resolveFullPostcode(property.postcode, property.address || '');
+  }
 
   // Fetch real comparable sales from Land Registry
   const comparables = await fetchComparables(property.postcode || '');

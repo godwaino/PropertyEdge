@@ -75,8 +75,8 @@ export default function PropertyForm({ onSubmit, isLoading, autoOpenImport, coll
     const e: Partial<Record<keyof FormFields, string>> = {};
     if (!fields.address.trim()) e.address = 'Required';
     if (!fields.postcode.trim()) e.postcode = 'Required';
-    else if (!/^[A-Z]{1,2}\d[A-Z\d]?\s*\d[A-Z]{2}$/i.test(fields.postcode.trim()))
-      e.postcode = 'Invalid UK postcode format';
+    else if (!/^[A-Z]{1,2}\d[A-Z\d]?(\s*\d[A-Z]{2})?$/i.test(fields.postcode.trim()))
+      e.postcode = 'Enter a full or partial postcode (e.g. "M3 4LQ" or "M3")';
     const price = Number(rawPrice(fields.askingPrice));
     if (!price || price < 1000) e.askingPrice = 'Enter a valid price';
     if (!fields.bedrooms || Number(fields.bedrooms) < 0) e.bedrooms = 'Required';
