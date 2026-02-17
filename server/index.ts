@@ -1520,8 +1520,41 @@ Where:
 // Demo endpoint — always works, no API key needed
 app.post('/api/demo', rateLimit, async (req, res) => {
   const property: PropertyRequest = req.body;
+
+  // --- Infer missing fields (match AI's ability to work with partial info) ---
+  // Estimate size from bedrooms + type if not provided
+  if (!property.sizeSqm || property.sizeSqm <= 0) {
+    const avgSqmPerBed: Record<string, number> = {
+      flat: 32, terraced: 30, 'semi-detached': 32, detached: 38, bungalow: 34,
+    };
+    const perBed = avgSqmPerBed[property.propertyType] || 30;
+    const beds = property.bedrooms || 2;
+    property.sizeSqm = Math.round(perBed * Math.max(beds, 1) + 15); // +15 for common areas
+  }
+  // Default bedrooms from size if missing
+  if (!property.bedrooms || property.bedrooms <= 0) {
+    if (property.sizeSqm > 120) property.bedrooms = 4;
+    else if (property.sizeSqm > 85) property.bedrooms = 3;
+    else if (property.sizeSqm > 50) property.bedrooms = 2;
+    else property.bedrooms = 1;
+  }
+  // Default property type from bedrooms if missing
+  if (!property.propertyType) {
+    if (property.bedrooms >= 4) property.propertyType = 'detached';
+    else if (property.bedrooms >= 3) property.propertyType = 'semi-detached';
+    else property.propertyType = 'flat';
+  }
+  // Default year built
+  if (!property.yearBuilt || property.yearBuilt <= 0) {
+    property.yearBuilt = 2000;
+  }
+  // Default tenure
+  if (!property.tenure) {
+    property.tenure = property.propertyType === 'flat' ? 'leasehold' : 'freehold';
+  }
+
   const price = property.askingPrice || 285000;
-  const sqm = property.sizeSqm || 75;
+  const sqm = property.sizeSqm;
 
   // Resolve partial postcodes before fetching comps
   if (property.postcode) {
@@ -1638,12 +1671,16 @@ app.post('/api/demo', rateLimit, async (req, res) => {
 
     const avgPrice = relevantSales.reduce((a, b) => a + b.price, 0) / relevantSales.length;
 
-    // Adjust average based on this property's size vs assumed average (~70sqm)
-    const sizeRatio = sqm / 70;
+    // Use actual comparable floor areas (from EPC data) if available, else assume 70sqm
+    const compsWithArea = relevantSales.filter(c => c.floorArea && c.floorArea > 0);
+    const avgCompSqm = compsWithArea.length >= 2
+      ? compsWithArea.reduce((sum, c) => sum + c.floorArea!, 0) / compsWithArea.length
+      : 70;
+    const sizeRatio = sqm / avgCompSqm;
     valuation = Math.round(avgPrice * sizeRatio / 1000) * 1000;
 
     // Adjust for year built
-    const age = 2025 - (property.yearBuilt || 2000);
+    const age = new Date().getFullYear() - (property.yearBuilt || 2000);
     if (age < 5) valuation = Math.round(valuation * 1.05 / 1000) * 1000;
     else if (age > 50) valuation = Math.round(valuation * 0.93 / 1000) * 1000;
 
@@ -1670,7 +1707,7 @@ app.post('/api/demo', rateLimit, async (req, res) => {
     const typeMultiplier: Record<string, number> = { flat: 1.0, terraced: 0.95, 'semi-detached': 0.9, detached: 1.05, bungalow: 0.85 };
     basePsm *= typeMultiplier[property.propertyType] || 1.0;
 
-    const age = 2025 - (property.yearBuilt || 2000);
+    const age = new Date().getFullYear() - (property.yearBuilt || 2000);
     if (age < 5) basePsm *= 1.08;
     else if (age < 15) basePsm *= 1.03;
     else if (age > 50) basePsm *= 0.92;
