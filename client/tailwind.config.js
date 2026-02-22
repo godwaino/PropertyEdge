@@ -20,6 +20,7 @@ export default {
         // Semantic theme colors (CSS custom properties)
         'th-page':    'rgb(var(--c-page) / <alpha-value>)',
         'th-card':    'rgb(var(--c-card) / <alpha-value>)',
+        'th-surface': 'rgb(var(--c-surface) / <alpha-value>)',
         'th-input':   'rgb(var(--c-input) / <alpha-value>)',
         'th-heading':  'rgb(var(--c-heading) / <alpha-value>)',
         'th-body':     'rgb(var(--c-body) / <alpha-value>)',
