@@ -15,23 +15,23 @@ function isAdminRoute() {
 }
 
 export default function App() {
-  const { isDark, toggle: toggleTheme } = useTheme();
+  useTheme();
 
   // Render admin dashboard on /admin
   if (isAdminRoute()) {
     return (
-      <div className="min-h-screen bg-th-page transition-colors duration-300">
-        <Header isDark={isDark} onToggleTheme={toggleTheme} />
-        <Admin isDark={isDark} onToggleTheme={toggleTheme} />
+      <div className="min-h-screen bg-th-page">
+        <Header />
+        <Admin />
       </div>
     );
   }
 
-  return <MainApp isDark={isDark} toggleTheme={toggleTheme} />;
+  return <MainApp />;
 }
 
 // ─── Main application ─────────────────────────────────────────────────────────
-function MainApp({ isDark, toggleTheme }: { isDark: boolean; toggleTheme: () => void }) {
+function MainApp() {
   const [isLoading, setIsLoading] = useState(false);
   const [result, setResult] = useState<AnalysisResult | null>(null);
   const [lastProperty, setLastProperty] = useState<PropertyInput | null>(null);
@@ -153,17 +153,15 @@ function MainApp({ isDark, toggleTheme }: { isDark: boolean; toggleTheme: () => 
   const showHero = !result && !isLoading;
 
   return (
-    <div className="min-h-screen bg-th-page transition-colors duration-300">
-      {/* Background glow (dark mode only) */}
-      {isDark && (
-        <div className="fixed inset-0 pointer-events-none overflow-hidden" aria-hidden>
-          <div className="absolute top-[-20%] left-1/2 -translate-x-1/2 w-[900px] h-[700px] bg-cyan/6 rounded-full blur-[140px]" />
-          <div className="absolute bottom-0 right-[-10%] w-[500px] h-[500px] bg-cyan/4 rounded-full blur-[120px]" />
-        </div>
-      )}
+    <div className="min-h-screen bg-th-page">
+      {/* Ambient background glow */}
+      <div className="fixed inset-0 pointer-events-none overflow-hidden" aria-hidden>
+        <div className="absolute top-[-20%] left-1/2 -translate-x-1/2 w-[900px] h-[700px] bg-cyan/6 rounded-full blur-[140px]" />
+        <div className="absolute bottom-0 right-[-10%] w-[500px] h-[500px] bg-cyan/4 rounded-full blur-[120px]" />
+      </div>
 
       <div className="relative z-10">
-        <Header onReset={handleReset} isDark={isDark} onToggleTheme={toggleTheme} />
+        <Header onReset={handleReset} />
 
         <Hero
           onAnalyseClick={handleAnalyseClick}

@@ -119,7 +119,7 @@ function LoginScreen({ onLogin }: { onLogin: (key: string) => void }) {
             </svg>
           </div>
           <h1 className="text-2xl font-bold text-th-heading tracking-tight">Admin dashboard</h1>
-          <p className="text-th-muted text-sm mt-1">PropertyEdge control panel</p>
+          <p className="text-th-muted text-sm mt-1">Property Scorecard control panel</p>
         </div>
 
         <div className="bg-th-card border border-th-border rounded-2xl p-6 elevation-2">
@@ -155,7 +155,7 @@ function LoginScreen({ onLogin }: { onLogin: (key: string) => void }) {
 
         <div className="mt-4 text-center">
           <a href="/" className="text-th-muted text-xs hover:text-th-secondary transition-colors">
-            ← Back to PropertyEdge
+            ← Back to Property Scorecard
           </a>
         </div>
       </div>
@@ -356,7 +356,7 @@ function RequestsTab({ stats }: { stats: ServerStats }) {
 // ─── Main Admin component ─────────────────────────────────────────────────────
 type Tab = 'overview' | 'cache' | 'requests';
 
-export default function Admin({ isDark, onToggleTheme }: { isDark: boolean; onToggleTheme: () => void }) {
+export default function Admin() {
   const [adminKey, setAdminKey] = useState(() => sessionStorage.getItem('pe_admin_key') || '');
   const [stats, setStats] = useState<ServerStats | null>(null);
   const [config, setConfig] = useState<AdminConfig | null>(null);
