@@ -65,6 +65,7 @@ function rateLimit(req: express.Request, res: express.Response, next: express.Ne
   }
 
   if (entry.count >= RATE_LIMIT) {
+    serverStats.rateLimitHits++;
     res.status(429).json({ error: 'Too many requests', message: 'Please wait a minute before trying again.' });
     return;
   }
@@ -80,6 +81,50 @@ setInterval(() => {
     if (now > entry.resetAt) rateLimitMap.delete(ip);
   }
 }, RATE_WINDOW_MS);
+
+// ─── Admin stats tracking ──────────────────────────────────────────────────
+const serverStats = {
+  startTime: Date.now(),
+  totalRequests: 0,
+  analyzeRequests: 0,
+  demoRequests: 0,
+  extractRequests: 0,
+  cacheHits: 0,
+  rateLimitHits: 0,
+  errors: 0,
+};
+
+interface RecentRequest {
+  ts: number;
+  type: 'analyze' | 'demo' | 'extract';
+  postcode?: string;
+  verdict?: string;
+  ms?: number;
+  cached?: boolean;
+}
+
+const recentRequests: RecentRequest[] = [];
+const MAX_RECENT = 100;
+
+function trackReq(entry: RecentRequest) {
+  if (recentRequests.length >= MAX_RECENT) recentRequests.shift();
+  recentRequests.push(entry);
+}
+
+// Admin auth middleware
+function adminAuth(req: express.Request, res: express.Response, next: express.NextFunction) {
+  const adminKey = process.env.ADMIN_KEY;
+  if (!adminKey) {
+    res.status(503).json({ error: 'Admin not configured', message: 'Set ADMIN_KEY env var to enable the admin dashboard.' });
+    return;
+  }
+  const provided = req.headers['x-admin-key'];
+  if (provided !== adminKey) {
+    res.status(401).json({ error: 'Unauthorized', message: 'Invalid admin key.' });
+    return;
+  }
+  next();
+}
 
 function validateProperty(body: any): { valid: boolean; error?: string } {
   if (!body || typeof body !== 'object') return { valid: false, error: 'Request body must be a JSON object' };
@@ -1146,6 +1191,9 @@ function resolvePostcodeFromComparables(
 
 // Extract property details from pasted listing text using Claude
 app.post('/api/extract-listing', rateLimit, async (req, res) => {
+  serverStats.totalRequests++;
+  serverStats.extractRequests++;
+  const t0 = Date.now();
   const { text } = req.body;
 
   if (!text || typeof text !== 'string' || text.trim().length < 10) {
@@ -1221,8 +1269,10 @@ Rules:
       extracted.postcode = await resolveFullPostcode(extracted.postcode, extracted.address);
     }
 
+    trackReq({ ts: Date.now(), type: 'extract', postcode: extracted.postcode, ms: Date.now() - t0 });
     res.json(extracted);
   } catch (error: any) {
+    serverStats.errors++;
     console.error('Listing extraction error:', error?.message);
     res.status(500).json({
       error: 'Extraction failed',
@@ -1262,6 +1312,9 @@ setInterval(() => {
 
 // Live analysis endpoint (requires API key)
 app.post('/api/analyze', rateLimit, async (req, res) => {
+  serverStats.totalRequests++;
+  serverStats.analyzeRequests++;
+  const t0 = Date.now();
   if (!anthropic) {
     res.status(500).json({
       error: 'No API key configured',
@@ -1308,6 +1361,8 @@ app.post('/api/analyze', rateLimit, async (req, res) => {
       else if (savings < -property.askingPrice * 0.03) verdict = 'GOOD_DEAL';
       else verdict = 'FAIR';
 
+      serverStats.cacheHits++;
+      trackReq({ ts: Date.now(), type: 'analyze', postcode: property.postcode, verdict, ms: Date.now() - t0, cached: true });
       res.json({ ...cached.result, savings, verdict });
       return;
     }
@@ -1643,6 +1698,7 @@ Where:
     else if (savings < -property.askingPrice * 0.03) verdict = 'GOOD_DEAL';
     else verdict = 'FAIR';
 
+    trackReq({ ts: Date.now(), type: 'analyze', postcode: property.postcode, verdict, ms: Date.now() - t0 });
     res.json({
       ...analysis,
       savings,
@@ -1651,6 +1707,7 @@ Where:
       data_sources: dataSources,
     });
   } catch (error: any) {
+    serverStats.errors++;
     console.error('Analysis error:', error?.status, error?.message);
 
     let status = 500;
@@ -1689,6 +1746,9 @@ Where:
 
 // Demo endpoint — always works, no API key needed
 app.post('/api/demo', rateLimit, async (req, res) => {
+  serverStats.totalRequests++;
+  serverStats.demoRequests++;
+  const t0 = Date.now();
   const property: PropertyRequest = req.body;
 
   // --- Infer missing fields before fetching (fields that don't need external data) ---
@@ -2422,6 +2482,36 @@ app.post('/api/demo', rateLimit, async (req, res) => {
     red_flags: redFlags.slice(0, 3),
     warnings: warnings.slice(0, 3),
     positives: positives.slice(0, 4),
+  });
+  trackReq({ ts: Date.now(), type: 'demo', postcode: property.postcode, verdict, ms: Date.now() - t0 });
+});
+
+// ─── Admin endpoints ───────────────────────────────────────────────────────
+app.get('/api/admin/stats', adminAuth, (_req, res) => {
+  res.json({
+    ...serverStats,
+    uptime: Date.now() - serverStats.startTime,
+    cacheSize: valuationCache.size,
+    rateLimitActiveIps: rateLimitMap.size,
+    recentRequests,
+    apiKeyConfigured: !!process.env.ANTHROPIC_API_KEY,
+    adminKeyConfigured: !!process.env.ADMIN_KEY,
+  });
+});
+
+app.post('/api/admin/cache/clear', adminAuth, (_req, res) => {
+  const cleared = valuationCache.size;
+  valuationCache.clear();
+  res.json({ cleared, message: `Cleared ${cleared} cached analyses` });
+});
+
+app.get('/api/admin/config', adminAuth, (_req, res) => {
+  res.json({
+    rateLimit: RATE_LIMIT,
+    rateLimitWindowSec: RATE_WINDOW_MS / 1000,
+    cacheTtlMin: CACHE_TTL_MS / 60_000,
+    apiKeyConfigured: !!process.env.ANTHROPIC_API_KEY,
+    adminKeyConfigured: !!process.env.ADMIN_KEY,
   });
 });
 

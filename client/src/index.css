@@ -9,56 +9,208 @@
 /* ─── Theme colour tokens ────────────────────────────────── */
 /* Light theme (default) */
 :root {
-  --c-page:     248 250 252;   /* slate-50  */
-  --c-card:     255 255 255;   /* white     */
-  --c-input:    241 245 249;   /* slate-100 */
-  --c-heading:  15  23  42;    /* slate-900 */
-  --c-body:     51  65  85;    /* slate-600 */
-  --c-secondary: 71  85 105;   /* slate-600→500 blend, WCAG AA on white */
-  --c-muted:    100 116 139;   /* slate-500 (was 400, too light) */
-  --c-faint:    148 163 184;   /* slate-400 (was 300, too light) */
-  --c-border:   203 213 225;   /* slate-300 (was 200, too faint) */
-  --c-skeleton: 226 232 240;   /* slate-200 */
+  --c-page:      240 244 248;   /* blue-tinted off-white */
+  --c-card:      255 255 255;   /* white                 */
+  --c-surface:   246 249 253;   /* surface container     */
+  --c-input:     241 245 249;   /* slate-100             */
+  --c-heading:   10  24  48;    /* deep navy             */
+  --c-body:      45  60  85;    /* slate-700             */
+  --c-secondary: 68  84 108;    /* slate-600             */
+  --c-muted:     100 116 139;   /* slate-500             */
+  --c-faint:     148 163 184;   /* slate-400             */
+  --c-border:    214 223 235;   /* blue-tinted border    */
+  --c-skeleton:  220 228 240;   /* slate-200             */
 }
 
 /* Dark theme */
 .dark {
-  --c-page:     10  25  41;    /* navy      */
-  --c-card:     13  33  55;    /* navy-light */
-  --c-input:    13  33  55;    /* navy-light */
-  --c-heading:  255 255 255;   /* white     */
-  --c-body:     209 213 219;   /* gray-300  */
-  --c-secondary:156 163 175;   /* gray-400  */
-  --c-muted:    107 114 128;   /* gray-500  */
-  --c-faint:    75  85  99;    /* gray-600  */
-  --c-border:   31  41  55;    /* gray-800  */
-  --c-skeleton: 31  41  55;    /* gray-800  */
+  --c-page:      8   18  36;    /* deep navy             */
+  --c-card:      12  26  52;    /* navy card             */
+  --c-surface:   14  32  62;    /* surface container     */
+  --c-input:     12  26  52;    /* navy-light            */
+  --c-heading:   240 248 255;   /* alice blue            */
+  --c-body:      190 210 235;   /* blue-gray             */
+  --c-secondary: 140 165 200;   /* lighter blue-gray     */
+  --c-muted:     90  115 150;   /* muted blue-gray       */
+  --c-faint:     60  82 115;    /* faint blue            */
+  --c-border:    22  42  80;    /* dark blue border      */
+  --c-skeleton:  18  36  68;    /* dark skeleton         */
 }
 
 body {
   margin: 0;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
   background: rgb(var(--c-page));
   color: rgb(var(--c-body));
   transition: background-color 0.3s ease, color 0.3s ease;
 }
 
+/* ─── Keyframe animations ─────────────────────────────────── */
+
 @keyframes pulse-glow {
-  0%, 100% { opacity: 0.4; }
-  50% { opacity: 1; }
+  0%, 100% { box-shadow: 0 0 20px rgba(0, 217, 255, 0.2); }
+  50%       { box-shadow: 0 0 48px rgba(0, 217, 255, 0.55); }
 }
 
 @keyframes slide-up {
-  from { opacity: 0; transform: translateY(20px); }
-  to { opacity: 1; transform: translateY(0); }
+  from { opacity: 0; transform: translateY(24px); }
+  to   { opacity: 1; transform: translateY(0); }
 }
 
-.animate-slide-up {
-  animation: slide-up 0.5s ease-out forwards;
+@keyframes float-in {
+  from { opacity: 0; transform: translateY(36px) scale(0.97); }
+  to   { opacity: 1; transform: translateY(0)   scale(1); }
 }
 
-/* Light-mode cards get a subtle shadow for depth */
+@keyframes fade-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+@keyframes scale-in {
+  from { opacity: 0; transform: scale(0.92); }
+  to   { opacity: 1; transform: scale(1); }
+}
+
+@keyframes shimmer {
+  0%   { background-position: -400px 0; }
+  100% { background-position:  400px 0; }
+}
+
+@keyframes spin-slow {
+  to { transform: rotate(360deg); }
+}
+
+@keyframes bounce-dot {
+  0%, 80%, 100% { transform: scale(0.6); opacity: 0.4; }
+  40%           { transform: scale(1);   opacity: 1;   }
+}
+
+/* ─── Utility classes ─────────────────────────────────────── */
+
+.animate-slide-up   { animation: slide-up 0.5s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
+.animate-float-in   { animation: float-in 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
+.animate-fade-in    { animation: fade-in  0.5s ease-out forwards; }
+.animate-scale-in   { animation: scale-in 0.4s cubic-bezier(0.34, 1.56, 0.64, 1) forwards; }
+.animate-pulse-glow { animation: pulse-glow 2.5s ease-in-out infinite; }
+.animate-spin-slow  { animation: spin-slow 2s linear infinite; }
+
+/* Stagger delays for child elements */
+.stagger-1 { animation-delay: 0.05s; }
+.stagger-2 { animation-delay: 0.10s; }
+.stagger-3 { animation-delay: 0.15s; }
+.stagger-4 { animation-delay: 0.20s; }
+
+/* Glass morphism */
+.glass {
+  background: rgba(255, 255, 255, 0.7);
+  backdrop-filter: blur(20px) saturate(180%);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  border: 1px solid rgba(255, 255, 255, 0.6);
+}
+.dark .glass {
+  background: rgba(12, 26, 52, 0.75);
+  border-color: rgba(22, 42, 80, 0.8);
+}
+
+/* Gradient text */
+.text-gradient-cyan {
+  background: linear-gradient(135deg, #00D9FF 0%, #00b8d9 60%, #0099cc 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* Gradient border card */
+.card-glow {
+  position: relative;
+}
+.card-glow::before {
+  content: '';
+  position: absolute;
+  inset: -1px;
+  border-radius: inherit;
+  background: linear-gradient(135deg, rgba(0,217,255,0.3), transparent 60%);
+  z-index: 0;
+  pointer-events: none;
+}
+
+/* Surface elevation (light mode) */
+:root:not(.dark) .elevation-1 {
+  box-shadow: 0 1px 3px rgba(10,24,48,0.07), 0 1px 2px rgba(10,24,48,0.05);
+}
+:root:not(.dark) .elevation-2 {
+  box-shadow: 0 4px 12px rgba(10,24,48,0.08), 0 2px 4px rgba(10,24,48,0.05);
+}
+:root:not(.dark) .elevation-3 {
+  box-shadow: 0 8px 24px rgba(10,24,48,0.1),  0 4px 8px rgba(10,24,48,0.06);
+}
+
+/* Shimmer skeleton */
+.skeleton-shimmer {
+  background: linear-gradient(
+    90deg,
+    rgb(var(--c-skeleton)) 25%,
+    rgba(255,255,255,0.3) 50%,
+    rgb(var(--c-skeleton)) 75%
+  );
+  background-size: 400px 100%;
+  animation: shimmer 1.6s infinite linear;
+}
+
+/* Hero mesh background */
+.hero-mesh {
+  background-image:
+    radial-gradient(ellipse at 20% 50%, rgba(0, 217, 255, 0.06) 0%, transparent 60%),
+    radial-gradient(ellipse at 80% 20%, rgba(0, 184, 217, 0.05) 0%, transparent 50%),
+    radial-gradient(ellipse at 60% 80%, rgba(0, 153, 204, 0.04) 0%, transparent 40%);
+}
+.dark .hero-mesh {
+  background-image:
+    radial-gradient(ellipse at 20% 50%, rgba(0, 217, 255, 0.10) 0%, transparent 60%),
+    radial-gradient(ellipse at 80% 20%, rgba(0, 184, 217, 0.08) 0%, transparent 50%),
+    radial-gradient(ellipse at 60% 80%, rgba(0, 153, 204, 0.06) 0%, transparent 40%);
+}
+
+/* Light-mode card default elevation */
 :root:not(.dark) .bg-th-card {
-  box-shadow: 0 1px 3px rgb(0 0 0 / 0.06), 0 1px 2px rgb(0 0 0 / 0.04);
+  box-shadow: 0 1px 3px rgba(10,24,48,0.06), 0 1px 2px rgba(10,24,48,0.04);
+}
+
+/* Pill button base */
+.btn-pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 9999px;
+  font-weight: 600;
+  transition: all 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+.btn-pill:active { transform: scale(0.96); }
+
+/* Chip base */
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  border-radius: 9999px;
+  padding: 0.25rem 0.75rem;
+  font-size: 0.75rem;
+  font-weight: 500;
+  border: 1px solid rgb(var(--c-border));
+  background: rgb(var(--c-card));
+  color: rgb(var(--c-body));
+  transition: all 0.15s ease;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.chip:hover {
+  border-color: rgb(var(--c-muted));
+}
+.chip.active {
+  background: rgba(0, 217, 255, 0.12);
+  border-color: rgba(0, 217, 255, 0.5);
+  color: #00D9FF;
 }

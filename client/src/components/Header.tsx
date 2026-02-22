@@ -5,43 +5,77 @@ interface Props {
 }
 
 export default function Header({ onReset, isDark, onToggleTheme }: Props) {
+  const isAdmin = window.location.pathname === '/admin';
+
   return (
-    <header className="pt-8 pb-4 text-center">
-      <div className="flex items-center justify-between max-w-4xl mx-auto px-4">
-        <div className="w-9" /> {/* spacer for centering */}
-        <h1 className="text-4xl font-bold tracking-tight">
-          {onReset ? (
-            <button onClick={onReset} className="hover:opacity-80 transition-opacity">
-              <span className="text-cyan dark:text-cyan">Property</span>
-              <span className="text-th-heading"> Scorecard</span>
+    <header className="sticky top-0 z-50 glass border-b border-th-border/60">
+      <div className="max-w-5xl mx-auto px-5 h-14 flex items-center justify-between gap-4">
+
+        {/* Brand */}
+        <div className="flex items-center gap-2.5 flex-shrink-0">
+          {/* Logo mark */}
+          <div className="w-7 h-7 rounded-lg bg-cyan flex items-center justify-center flex-shrink-0 shadow-sm shadow-cyan/30">
+            <svg className="w-4 h-4 text-navy" viewBox="0 0 16 16" fill="currentColor">
+              <path d="M8 1.5a.75.75 0 0 1 .75.75v1.5h3a.75.75 0 0 1 .75.75v4a.75.75 0 0 1-.75.75h-3v.75a2.75 2.75 0 1 1-1.5 0V9.25h-3A.75.75 0 0 1 3.5 8.5v-4a.75.75 0 0 1 .75-.75h3V2.25A.75.75 0 0 1 8 1.5ZM5 4.75v3h6v-3H5Zm3 5.5a1.25 1.25 0 1 0 0 2.5 1.25 1.25 0 0 0 0-2.5Z" />
+            </svg>
+          </div>
+          {onReset && !isAdmin ? (
+            <button onClick={onReset} className="hover:opacity-75 transition-opacity">
+              <span className="text-gradient-cyan font-bold text-base tracking-tight">PropertyEdge</span>
             </button>
           ) : (
-            <>
-              <span className="text-cyan dark:text-cyan">Property</span>
-              <span className="text-th-heading"> Scorecard</span>
-            </>
+            <span className="text-gradient-cyan font-bold text-base tracking-tight">PropertyEdge</span>
           )}
-        </h1>
-        <button
-          onClick={onToggleTheme}
-          className="w-9 h-9 rounded-full border border-th-border text-th-secondary hover:text-th-heading hover:border-th-heading/30 transition-colors flex items-center justify-center"
-          aria-label={isDark ? 'Switch to light mode' : 'Switch to dark mode'}
-        >
-          {isDark ? (
-            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <circle cx="12" cy="12" r="5" />
-              <path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42" />
-            </svg>
-          ) : (
-            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />
-            </svg>
+        </div>
+
+        {/* Right controls */}
+        <div className="flex items-center gap-2">
+          {/* Admin link (only show on main pages, not admin) */}
+          {!isAdmin && (
+            <a
+              href="/admin"
+              className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium text-th-muted border border-th-border hover:border-th-muted hover:text-th-secondary transition-all"
+            >
+              <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M10.343 3.94c.09-.542.56-.94 1.11-.94h1.093c.55 0 1.02.398 1.11.94l.149.894c.07.424.384.764.78.93.398.164.855.142 1.205-.108l.737-.527a1.125 1.125 0 0 1 1.45.12l.773.774c.39.389.44 1.002.12 1.45l-.527.737c-.25.35-.272.806-.107 1.204.165.397.505.71.93.78l.893.15c.543.09.94.559.94 1.109v1.094c0 .55-.397 1.02-.94 1.11l-.894.149c-.424.07-.764.383-.929.78-.165.398-.143.854.107 1.204l.527.738c.32.447.269 1.06-.12 1.45l-.774.773a1.125 1.125 0 0 1-1.449.12l-.738-.527c-.35-.25-.806-.272-1.203-.107-.398.165-.71.505-.781.929l-.149.894c-.09.542-.56.94-1.11.94h-1.094c-.55 0-1.019-.398-1.11-.94l-.148-.894c-.071-.424-.384-.764-.781-.93-.398-.164-.854-.142-1.204.108l-.738.527c-.447.32-1.06.269-1.45-.12l-.773-.774a1.125 1.125 0 0 1-.12-1.45l.527-.737c.25-.35.272-.806.108-1.204-.165-.397-.506-.71-.93-.78l-.894-.15c-.542-.09-.94-.56-.94-1.109v-1.094c0-.55.398-1.02.94-1.11l.894-.149c.424-.07.764-.383.93-.78.165-.398.143-.854-.108-1.204l-.526-.738a1.125 1.125 0 0 1 .12-1.45l.773-.773a1.125 1.125 0 0 1 1.45-.12l.737.527c.35.25.807.272 1.204.107.397-.165.71-.505.78-.929l.15-.894Z" />
+                <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z" />
+              </svg>
+              Admin
+            </a>
           )}
-        </button>
+
+          {/* Back to app link on admin page */}
+          {isAdmin && (
+            <a
+              href="/"
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium text-th-muted border border-th-border hover:border-th-muted hover:text-th-secondary transition-all"
+            >
+              <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M10.5 19.5 3 12m0 0 7.5-7.5M3 12h18" />
+              </svg>
+              Back to app
+            </a>
+          )}
+
+          {/* Theme toggle */}
+          <button
+            onClick={onToggleTheme}
+            className="w-8 h-8 rounded-full border border-th-border text-th-muted hover:text-cyan hover:border-cyan/50 transition-all flex items-center justify-center"
+            aria-label={isDark ? 'Switch to light mode' : 'Switch to dark mode'}
+          >
+            {isDark ? (
+              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <circle cx="12" cy="12" r="5" />
+                <path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42" />
+              </svg>
+            ) : (
+              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />
+              </svg>
+            )}
+          </button>
+        </div>
       </div>
-      <p className="text-th-secondary mt-2 text-sm">
-        AI-powered UK property analysis &mdash; know before you buy
-      </p>
     </header>
   );
 }

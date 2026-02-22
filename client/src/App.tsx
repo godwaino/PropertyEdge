@@ -5,17 +5,38 @@ import FeaturedProperties from './components/FeaturedProperties';
 import PropertyForm from './components/PropertyForm';
 import AnalysisResults from './components/AnalysisResults';
 import LoadingState from './components/LoadingState';
+import Admin from './components/Admin';
 import { PropertyInput, AnalysisResult } from './types/property';
 import { useTheme } from './hooks/useTheme';
 
+// ─── Admin routing ────────────────────────────────────────────────────────────
+function isAdminRoute() {
+  return window.location.pathname.startsWith('/admin');
+}
+
 export default function App() {
   const { isDark, toggle: toggleTheme } = useTheme();
+
+  // Render admin dashboard on /admin
+  if (isAdminRoute()) {
+    return (
+      <div className="min-h-screen bg-th-page transition-colors duration-300">
+        <Header isDark={isDark} onToggleTheme={toggleTheme} />
+        <Admin isDark={isDark} onToggleTheme={toggleTheme} />
+      </div>
+    );
+  }
+
+  return <MainApp isDark={isDark} toggleTheme={toggleTheme} />;
+}
+
+// ─── Main application ─────────────────────────────────────────────────────────
+function MainApp({ isDark, toggleTheme }: { isDark: boolean; toggleTheme: () => void }) {
   const [isLoading, setIsLoading] = useState(false);
   const [result, setResult] = useState<AnalysisResult | null>(null);
   const [lastProperty, setLastProperty] = useState<PropertyInput | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [demoMode, setDemoMode] = useState(true);
-  const [apiKeyConfigured, setApiKeyConfigured] = useState(false);
   const [autoOpenImport, setAutoOpenImport] = useState(false);
   const [isExtracting, setIsExtracting] = useState(false);
   const [selectedPersona, setSelectedPersona] = useState<string | null>(null);
@@ -25,7 +46,6 @@ export default function App() {
     fetch('/api/health')
       .then((r) => r.json())
       .then((data) => {
-        setApiKeyConfigured(data.apiKeyConfigured);
         if (!data.apiKeyConfigured) setDemoMode(true);
       })
       .catch(() => setDemoMode(true));
@@ -39,12 +59,10 @@ export default function App() {
     }, 50);
   };
 
-  // Auto-fill from example card/button and immediately analyse
   const handleTryExample = (property: PropertyInput) => {
     handleAnalyze(property);
   };
 
-  // Extract listing text from hero paste box, then auto-fill form and scroll
   const handleExtractListing = async (text: string) => {
     setIsExtracting(true);
     try {
@@ -56,7 +74,6 @@ export default function App() {
       const data = await response.json();
       if (!response.ok) throw new Error(data.message);
 
-      // Build a PropertyInput from extracted data and auto-submit
       const property: PropertyInput = {
         address: data.address || '',
         postcode: data.postcode || '',
@@ -71,12 +88,10 @@ export default function App() {
         leaseYears: data.leaseYears || 0,
       };
 
-      // Auto-analyse immediately after extraction
       setIsExtracting(false);
       handleAnalyze(property);
     } catch {
       setIsExtracting(false);
-      // Fallback: open the manual form
       handleAnalyseClick();
     }
   };
@@ -109,7 +124,6 @@ export default function App() {
     }
   };
 
-  // Scroll loading state into view when analysis starts
   useEffect(() => {
     if (isLoading) {
       setTimeout(() => {
@@ -118,7 +132,6 @@ export default function App() {
     }
   }, [isLoading]);
 
-  // Scroll results into view when they appear
   useEffect(() => {
     if (result && !isLoading) {
       setTimeout(() => {
@@ -141,18 +154,16 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-th-page transition-colors duration-300">
-      {/* Decorative glow — only in dark mode */}
+      {/* Background glow (dark mode only) */}
       {isDark && (
-        <div className="fixed inset-0 pointer-events-none">
-          <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[800px] h-[600px] bg-cyan/5 rounded-full blur-[120px]" />
-          <div className="absolute bottom-0 right-0 w-[400px] h-[400px] bg-gold/5 rounded-full blur-[100px]" />
+        <div className="fixed inset-0 pointer-events-none overflow-hidden" aria-hidden>
+          <div className="absolute top-[-20%] left-1/2 -translate-x-1/2 w-[900px] h-[700px] bg-cyan/6 rounded-full blur-[140px]" />
+          <div className="absolute bottom-0 right-[-10%] w-[500px] h-[500px] bg-cyan/4 rounded-full blur-[120px]" />
         </div>
       )}
 
-      <div className="relative z-10 pb-8">
+      <div className="relative z-10">
         <Header onReset={handleReset} isDark={isDark} onToggleTheme={toggleTheme} />
-
-        {/* Live/Demo toggle hidden — demo mode only for now */}
 
         <Hero
           onAnalyseClick={handleAnalyseClick}
@@ -163,12 +174,9 @@ export default function App() {
           onPersonaSelect={(p) => setSelectedPersona(p || null)}
         />
 
-        <FeaturedProperties
-          onSelect={handleTryExample}
-          visible={showHero}
-        />
+        <FeaturedProperties onSelect={handleTryExample} visible={showHero} />
 
-        <main className="px-4 mt-2">
+        <main className="px-4 pb-8">
           {formVisible && (
             <PropertyForm
               onSubmit={handleAnalyze}
@@ -180,12 +188,12 @@ export default function App() {
 
           {error && (
             <div className="w-full max-w-4xl mx-auto mt-6">
-              <div className="bg-pe-red/10 border border-pe-red/30 rounded-xl p-4 text-center">
+              <div className="bg-pe-red/8 border border-pe-red/25 rounded-2xl p-5 text-center">
                 <p className="text-pe-red font-medium">{error}</p>
                 {!demoMode && (
                   <button
                     onClick={() => { setDemoMode(true); setError(null); }}
-                    className="mt-3 text-sm px-4 py-2 rounded-lg border border-gold bg-gold/10 text-gold hover:bg-gold/20 transition-all"
+                    className="mt-3 btn-pill text-sm px-5 py-2 border border-gold/50 bg-gold/8 text-gold hover:bg-gold/20"
                   >
                     Switch to Demo Mode
                   </button>
@@ -202,7 +210,7 @@ export default function App() {
               <div className="w-full max-w-4xl mx-auto mt-6 text-center">
                 <button
                   onClick={handleReset}
-                  className="px-6 py-2.5 rounded-xl border border-th-border text-th-secondary hover:text-cyan hover:border-cyan/50 transition-all text-sm"
+                  className="btn-pill px-6 py-2.5 text-sm border border-th-border text-th-secondary hover:text-cyan hover:border-cyan/40 bg-th-card elevation-1"
                 >
                   Analyse another property
                 </button>
@@ -211,34 +219,34 @@ export default function App() {
           )}
         </main>
 
-        {/* Page footer — data sources + trust cues */}
-        <footer className="mt-16 border-t border-th-border pt-8 pb-4 max-w-3xl mx-auto px-4">
-          <p className="text-th-muted text-[10px] uppercase tracking-wider mb-3 text-center">Data sources</p>
-          <div className="flex flex-wrap justify-center gap-3">
+        {/* Footer */}
+        <footer className="border-t border-th-border pt-8 pb-6 max-w-4xl mx-auto px-5">
+          <p className="text-th-muted text-[10px] uppercase tracking-widest mb-4 text-center font-medium">
+            Data sources
+          </p>
+          <div className="flex flex-wrap justify-center gap-2.5">
             {[
               { name: 'HM Land Registry', desc: 'Sold prices & HPI' },
-              { name: 'EPC Register', desc: 'Energy & floor area' },
-              { name: 'Police UK', desc: 'Crime data' },
-              { name: 'Environment Agency', desc: 'Flood risk' },
-              { name: 'PlanIt', desc: 'Planning apps' },
-              { name: 'postcodes.io', desc: 'Geolocation' },
-              { name: 'AI Analysis', desc: 'Valuation model' },
+              { name: 'EPC Register',     desc: 'Energy & floor area' },
+              { name: 'Police UK',        desc: 'Crime data' },
+              { name: 'Env. Agency',      desc: 'Flood risk' },
+              { name: 'PlanIt',           desc: 'Planning apps' },
+              { name: 'postcodes.io',     desc: 'Geolocation' },
+              { name: 'Claude AI',        desc: 'Valuation model' },
             ].map((s) => (
-              <div key={s.name} className="flex items-center gap-1.5 bg-th-card/40 border border-th-border rounded-lg px-2.5 py-1.5">
-                <div className="w-1.5 h-1.5 rounded-full bg-cyan/60 flex-shrink-0" />
-                <div className="text-left">
-                  <p className="text-th-body text-[10px] font-medium leading-tight">{s.name}</p>
-                  <p className="text-th-faint text-[9px] leading-tight">{s.desc}</p>
-                </div>
+              <div key={s.name} className="chip">
+                <span className="w-1.5 h-1.5 rounded-full bg-cyan/50 flex-shrink-0" />
+                <span className="font-medium text-th-body">{s.name}</span>
+                <span className="text-th-faint">&middot; {s.desc}</span>
               </div>
             ))}
           </div>
-          <div className="mt-4 flex flex-wrap justify-center gap-4 text-[11px] text-th-muted">
+          <div className="mt-5 flex flex-wrap justify-center gap-4 text-[11px] text-th-muted">
             <span>No account needed</span>
             <span>&middot;</span>
             <span>Searches not stored</span>
           </div>
-          <p className="mt-6 text-th-faint text-[10px] text-center leading-relaxed">
+          <p className="mt-4 text-th-faint text-[10px] text-center leading-relaxed max-w-lg mx-auto">
             Guidance only — not a formal valuation. Verify with a RICS surveyor or qualified agent before making offers.
           </p>
         </footer>
