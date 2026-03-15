@@ -109,7 +109,31 @@ interface LRComparable {
 interface PostcodeInfo {
   region: string;
   adminDistrict: string;
+  adminDistrictCode: string;
   country: string;
+  ward: string;
+  constituency: string;
+  lsoa: string;
+  latitude: number | null;
+  longitude: number | null;
+}
+
+interface CrimeStats {
+  total: number;
+  months: number;
+  perMonth: number;
+  topCategories: Array<{ label: string; count: number; pct: number }>;
+}
+
+interface FloodRisk {
+  zone3: boolean;  // high risk — >3.3% annual probability
+  zone2: boolean;  // medium risk — 0.1–1% annual probability
+}
+
+interface UnemploymentData {
+  rate: number;        // percentage
+  area: string;
+  date: string;
 }
 
 interface EPCRecord {
@@ -161,11 +185,113 @@ async function fetchPostcodeInfo(postcode: string): Promise<PostcodeInfo | null>
   if (!res.ok) return null;
   const data = await res.json() as any;
   if (!data?.result) return null;
+  const r = data.result;
   return {
-    region: data.result.region || data.result.country || '',
-    adminDistrict: data.result.admin_district || '',
-    country: data.result.country || 'England',
+    region: r.region || r.country || '',
+    adminDistrict: r.admin_district || '',
+    adminDistrictCode: r.codes?.admin_district || '',
+    country: r.country || 'England',
+    ward: r.admin_ward || '',
+    constituency: r.parliamentary_constituency_2024 || r.parliamentary_constituency || '',
+    lsoa: r.lsoa || '',
+    latitude: r.latitude ?? null,
+    longitude: r.longitude ?? null,
   };
+}
+
+const CRIME_LABELS: Record<string, string> = {
+  'anti-social-behaviour': 'Anti-social behaviour',
+  'violent-crime': 'Violent crime',
+  'burglary': 'Burglary',
+  'vehicle-crime': 'Vehicle crime',
+  'criminal-damage-arson': 'Criminal damage & arson',
+  'robbery': 'Robbery',
+  'shoplifting': 'Shoplifting',
+  'drugs': 'Drugs offences',
+  'theft-from-the-person': 'Theft from person',
+  'possession-of-weapons': 'Weapons possession',
+  'public-order': 'Public order',
+  'other-theft': 'Other theft',
+  'bicycle-theft': 'Bicycle theft',
+  'other-crime': 'Other crime',
+};
+
+function prevMonths(n: number): string[] {
+  const out: string[] = [];
+  const d = new Date();
+  for (let i = 1; i <= n; i++) {
+    d.setMonth(d.getMonth() - 1);
+    out.push(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`);
+  }
+  return out;
+}
+
+async function fetchCrimeStats(lat: number, lng: number): Promise<CrimeStats> {
+  const months = prevMonths(3);
+  const results = await Promise.allSettled(
+    months.map((m) =>
+      fetch(`https://data.police.uk/api/crimes-street/all-crime?lat=${lat}&lng=${lng}&date=${m}`, {
+        signal: AbortSignal.timeout(8000),
+      }).then((r) => (r.ok ? r.json() as Promise<any[]> : Promise.resolve([])))
+    )
+  );
+  const all: any[] = results
+    .filter((r): r is PromiseFulfilledResult<any[]> => r.status === 'fulfilled')
+    .flatMap((r) => r.value ?? []);
+
+  const counts: Record<string, number> = {};
+  for (const c of all) counts[c.category || 'other-crime'] = (counts[c.category || 'other-crime'] || 0) + 1;
+
+  const total = all.length;
+  const successMonths = results.filter((r) => r.status === 'fulfilled').length;
+  const topCategories = Object.entries(counts)
+    .sort(([, a], [, b]) => b - a)
+    .slice(0, 6)
+    .map(([cat, count]) => ({
+      label: CRIME_LABELS[cat] || cat,
+      count,
+      pct: total > 0 ? Math.round((count / total) * 100) : 0,
+    }));
+
+  return { total, months: successMonths, perMonth: successMonths > 0 ? Math.round(total / successMonths) : 0, topCategories };
+}
+
+async function fetchFloodRisk(lat: number, lng: number): Promise<FloodRisk> {
+  const base = 'https://environment.data.gov.uk/arcgis/rest/services/EA';
+  const params = `geometry=${lng},${lat}&geometryType=esriGeometryPoint&inSR=4326&spatialRel=esriSpatialRelIntersects&returnCountOnly=true&f=json`;
+  const [z3, z2] = await Promise.allSettled([
+    fetch(`${base}/FloodMapForPlanningRiversAndSeaFloodZone3/MapServer/0/query?${params}`, { signal: AbortSignal.timeout(8000) }).then((r) => r.ok ? r.json() as Promise<any> : null),
+    fetch(`${base}/FloodMapForPlanningRiversAndSeaFloodZone2/MapServer/0/query?${params}`, { signal: AbortSignal.timeout(8000) }).then((r) => r.ok ? r.json() as Promise<any> : null),
+  ]);
+  return {
+    zone3: z3.status === 'fulfilled' && (z3.value as any)?.count > 0,
+    zone2: z2.status === 'fulfilled' && (z2.value as any)?.count > 0,
+  };
+}
+
+async function fetchUnemployment(adminDistrictCode: string, adminDistrict: string): Promise<UnemploymentData | null> {
+  if (!adminDistrictCode) return null;
+  // Nomis API — Labour Market Profile (NM_17_5), claimant count rate, latest month
+  // Geography ID is derived from the ONS area code (e.g. E08000003 for Manchester)
+  const url = `https://www.nomisweb.co.uk/api/v01/dataset/NM_162_1/data.json?geography=TYPE463&measures=20100&time=latest&select=geography_name,obs_value,time_name`;
+  try {
+    const res = await fetch(url, { signal: AbortSignal.timeout(7000) });
+    if (!res.ok) return null;
+    const data = await res.json() as any;
+    const rows: any[] = data?.obs ?? [];
+    // Find the row matching our local authority by name
+    const match = rows.find((r: any) =>
+      (r.geography?.description || '').toLowerCase().includes(adminDistrict.toLowerCase())
+    );
+    if (!match) return null;
+    return {
+      rate: parseFloat(match.obs_value?.value ?? match.obs_value ?? '0'),
+      area: match.geography?.description || adminDistrict,
+      date: match.time?.description || '',
+    };
+  } catch {
+    return null;
+  }
 }
 
 async function fetchEPCData(postcode: string): Promise<EPCRecord[] | null> {
@@ -196,7 +322,10 @@ function buildPrompt(
   property: PropertyRequest,
   comparables: LRComparable[],
   postcodeInfo: PostcodeInfo | null,
-  epcData: EPCRecord[] | null
+  epcData: EPCRecord[] | null,
+  crimeStats: CrimeStats | null,
+  floodRisk: FloodRisk | null,
+  unemployment: UnemploymentData | null,
 ): string {
   const leaseholdInfo =
     property.tenure === 'leasehold'
@@ -259,37 +388,78 @@ EPC Register (${epcData.length} certificates in postcode):
   • Subject property (${property.sizeSqm} sqm) is ${areaAvg ? `${Math.abs(property.sizeSqm - areaAvg)} sqm ${property.sizeSqm >= areaAvg ? 'above' : 'below'} postcode average` : 'N/A'}`;
   }
 
-  const areaLine = postcodeInfo
-    ? `Area: ${postcodeInfo.adminDistrict}${postcodeInfo.region ? ', ' + postcodeInfo.region : ''}`
-    : '';
+  // ── Area profile ──────────────────────────────────────────────────────────
+  const areaLines = postcodeInfo ? [
+    `  • Local authority: ${postcodeInfo.adminDistrict}${postcodeInfo.region ? ', ' + postcodeInfo.region : ''}`,
+    postcodeInfo.ward ? `  • Ward: ${postcodeInfo.ward}` : '',
+    postcodeInfo.constituency ? `  • Constituency: ${postcodeInfo.constituency}` : '',
+    unemployment ? `  • Unemployment rate (${unemployment.area}, ${unemployment.date}): ${unemployment.rate.toFixed(1)}%` : '',
+  ].filter(Boolean).join('\n') : '  • Area data unavailable';
 
-  return `You are a UK property valuation expert with access to real market data. Analyze this property and base your valuation on the actual Land Registry sold prices provided.
+  // ── Flood risk ────────────────────────────────────────────────────────────
+  let floodSection = '';
+  if (floodRisk) {
+    const z3line = floodRisk.zone3
+      ? '  • ⚠️ FLOOD ZONE 3 (HIGH RISK): >3.3% annual probability — major impact on insurance costs, mortgage availability, and resale value'
+      : '  • Flood Zone 3 (high risk): NOT IN ZONE';
+    const z2line = floodRisk.zone2
+      ? '  • ⚠️ FLOOD ZONE 2 (MEDIUM RISK): 0.1–1% annual probability — insurance premiums likely elevated'
+      : '  • Flood Zone 2 (medium risk): NOT IN ZONE';
+    const summary = floodRisk.zone3
+      ? '  • Assessment: HIGH FLOOD RISK — flag as red flag with significant financial impact'
+      : floodRisk.zone2
+      ? '  • Assessment: MEDIUM FLOOD RISK — flag as warning'
+      : '  • Assessment: Low flood risk — positive factor';
+    floodSection = `\nFlood Risk (Environment Agency):\n${z3line}\n${z2line}\n${summary}`;
+  }
+
+  // ── Crime stats ───────────────────────────────────────────────────────────
+  let crimeSection = '';
+  if (crimeStats && crimeStats.total > 0) {
+    const catLines = crimeStats.topCategories
+      .map((c) => `  • ${c.label}: ${c.count} (${c.pct}%)`)
+      .join('\n');
+    crimeSection = `\nCrime (Police UK, ${crimeStats.months}-month window, ~1 mile radius):
+  • Total incidents: ${crimeStats.total} (~${crimeStats.perMonth}/month)
+${catLines}`;
+  } else if (crimeStats) {
+    crimeSection = '\nCrime (Police UK): No incidents recorded in this area in the last 3 months';
+  }
+
+  return `You are a UK property valuation expert with access to real market data. Analyze this property using all data provided below.
 
 PROPERTY:
 - Address: ${property.address}, ${property.postcode}
 - Asking price: £${property.askingPrice.toLocaleString()}
 - Type: ${property.propertyType}, ${property.bedrooms} bed, ${property.sizeSqm} sqm, built ${property.yearBuilt}
 - Tenure: ${property.tenure}${leaseholdInfo}
-${areaLine}
 
 ════════════ REAL MARKET DATA ════════════
 
 Land Registry sold prices — ${property.postcode} (last 3 years, ${recent.length} total transactions):
 ${comparableLines}
 
-Statistics:
+Price statistics:
   • ${sameType.length} comparable ${property.propertyType}(s) sold in postcode (last 3 years)
   • Average sold price — all types: ${allAvg ? '£' + allAvg.toLocaleString() : 'N/A'}
   • Average sold price — ${property.propertyType}s: ${typeAvg ? '£' + typeAvg.toLocaleString() : 'N/A'}
   • Implied price per sqm (${property.propertyType}): ${impliedPsqm}
   • Asking price vs comparables: ${pricePct}
   • Price trend: ${trendLine}${epcSection}
+${floodSection}
+${crimeSection}
+
+Area profile (Postcodes.io / ONS Nomis):
+${areaLines}
 
 ══════════════════════════════════════════
 
-Using the real data above, provide a thorough analysis. Reference specific sold prices. If asking price deviates significantly from comparables, explain why (condition premium, renovation, leasehold issues, etc.).
-
-Confidence in your valuation should be HIGH (75–95) if ≥5 comparable sales exist, MEDIUM (45–74) if 2–4 exist, LOW (20–44) if 0–1 exist.
+Instructions:
+- Base valuation on Land Registry comparables. Cite specific sold prices.
+- If flood zone data shows risk, include it as a red flag or warning.
+- Use crime data to inform red flags/warnings if rates are notably high.
+- Unemployment rate context helps assess future price resilience.
+- Confidence: HIGH (75–95) if ≥5 comparables, MEDIUM (45–74) if 2–4, LOW (20–44) if 0–1.
 
 Respond with ONLY valid JSON, no other text:
 {
@@ -304,10 +474,8 @@ Respond with ONLY valid JSON, no other text:
 Rules:
 - verdict: "GOOD_DEAL" | "FAIR" | "OVERPRICED"
 - savings: asking − valuation (positive = buyer saves, negative = overpaying)
-- confidence: 0–100 integer
-- impact: £ values, positive integers
-- At least 2 items per category
-- Cite actual comparable prices in descriptions`;
+- confidence: 0–100 integer, impact: £ positive integers
+- At least 2 items per category`;
 }
 
 // Serve built React frontend
@@ -362,21 +530,35 @@ app.post('/api/analyze', rateLimit, async (req, res) => {
   try {
     const property: PropertyRequest = req.body;
 
-    // Fetch real market data concurrently — gracefully degrade if any fail
-    const [lrResult, postcodeResult, epcResult] = await Promise.allSettled([
+    // Stage 1: postcode lookup (fast, ~200ms) — provides lat/lng for crime + flood
+    const postcodeInfo = await fetchPostcodeInfo(property.postcode).catch(() => null);
+
+    // Stage 2: all remaining sources in parallel
+    const [lrResult, epcResult, crimeResult, floodResult, unemploymentResult] = await Promise.allSettled([
       fetchLRComparables(property.postcode),
-      fetchPostcodeInfo(property.postcode),
       fetchEPCData(property.postcode),
+      postcodeInfo?.latitude != null
+        ? fetchCrimeStats(postcodeInfo.latitude, postcodeInfo.longitude!)
+        : Promise.resolve(null),
+      postcodeInfo?.latitude != null
+        ? fetchFloodRisk(postcodeInfo.latitude, postcodeInfo.longitude!)
+        : Promise.resolve(null),
+      postcodeInfo?.adminDistrict
+        ? fetchUnemployment(postcodeInfo.adminDistrictCode, postcodeInfo.adminDistrict)
+        : Promise.resolve(null),
     ]);
 
     const comparables = lrResult.status === 'fulfilled' ? lrResult.value : [];
-    const postcodeInfo = postcodeResult.status === 'fulfilled' ? postcodeResult.value : null;
     const epcData = epcResult.status === 'fulfilled' ? epcResult.value : null;
+    const crimeStats = crimeResult.status === 'fulfilled' ? crimeResult.value : null;
+    const floodRisk = floodResult.status === 'fulfilled' ? floodResult.value : null;
+    const unemployment = unemploymentResult.status === 'fulfilled' ? unemploymentResult.value : null;
 
-    if (lrResult.status === 'rejected') console.warn('Land Registry fetch failed:', lrResult.reason?.message);
-    if (postcodeResult.status === 'rejected') console.warn('Postcodes.io fetch failed:', postcodeResult.reason?.message);
+    if (lrResult.status === 'rejected') console.warn('Land Registry:', lrResult.reason?.message);
+    if (crimeResult.status === 'rejected') console.warn('Police UK:', crimeResult.reason?.message);
+    if (floodResult.status === 'rejected') console.warn('Flood risk:', floodResult.reason?.message);
 
-    const prompt = buildPrompt(property, comparables, postcodeInfo, epcData);
+    const prompt = buildPrompt(property, comparables, postcodeInfo, epcData, crimeStats, floodRisk, unemployment);
 
     const message = await anthropic.messages.create({
       model: 'claude-sonnet-4-20250514',
@@ -407,6 +589,9 @@ app.post('/api/analyze', rateLimit, async (req, res) => {
       } : null,
       epc: !!(epcData && epcData.length > 0),
       postcode: !!postcodeInfo,
+      crime: crimeStats ? { total: crimeStats.total, months: crimeStats.months } : null,
+      floodRisk: floodRisk ?? null,
+      unemployment: unemployment ? { rate: unemployment.rate, area: unemployment.area } : null,
     };
 
     res.json(analysis);
