@@ -95,6 +95,221 @@ function validateProperty(body: any): { valid: boolean; error?: string } {
 app.use(cors());
 app.use(express.json({ limit: '100kb' }));
 
+// ─── Real-data types ──────────────────────────────────────────────────────────
+
+interface LRComparable {
+  price: number;
+  date: string;
+  propertyType: string; // 'flat' | 'terraced' | 'semi-detached' | 'detached' | 'other'
+  tenure: string;       // 'leasehold' | 'freehold'
+  address: string;
+  newBuild: boolean;
+}
+
+interface PostcodeInfo {
+  region: string;
+  adminDistrict: string;
+  country: string;
+}
+
+interface EPCRecord {
+  address: string;
+  energyRating: string;
+  floorArea: number;
+  inspectionDate: string;
+}
+
+// ─── Real-data fetchers ───────────────────────────────────────────────────────
+
+function lrTypeLabel(raw: unknown): string {
+  const s = typeof raw === 'string' ? raw.toLowerCase() : JSON.stringify(raw ?? '').toLowerCase();
+  if (s.includes('flat') || s.includes('maisonette')) return 'flat';
+  if (s.includes('semi')) return 'semi-detached';
+  if (s.includes('terraced')) return 'terraced';
+  if (s.includes('detached')) return 'detached';
+  return 'other';
+}
+
+async function fetchLRComparables(postcode: string): Promise<LRComparable[]> {
+  const encoded = encodeURIComponent(postcode.trim().toUpperCase());
+  const url = `https://landregistry.data.gov.uk/data/ppi/transaction-record.json?propertyAddress.postcode=${encoded}&_pageSize=100&_sort=-transactionDate`;
+  const res = await fetch(url, {
+    headers: { Accept: 'application/json' },
+    signal: AbortSignal.timeout(9000),
+  });
+  if (!res.ok) throw new Error(`LR API ${res.status}`);
+  const data = await res.json() as any;
+  const items: any[] = data?.result?.items ?? [];
+  return items
+    .map((item) => ({
+      price: Number(item.pricePaid ?? 0),
+      date: String(item.transactionDate ?? '').slice(0, 10),
+      propertyType: lrTypeLabel(item.propertyType),
+      tenure: String(item.estateType ?? '').toLowerCase().includes('lease') ? 'leasehold' : 'freehold',
+      address: [item.propertyAddress?.paon, item.propertyAddress?.saon, item.propertyAddress?.street]
+        .filter(Boolean).join(' '),
+      newBuild: item.newBuild === true || item.newBuild === 'Y',
+    }))
+    .filter((c) => c.price > 0);
+}
+
+async function fetchPostcodeInfo(postcode: string): Promise<PostcodeInfo | null> {
+  const encoded = postcode.trim().replace(/\s+/g, '');
+  const res = await fetch(`https://api.postcodes.io/postcodes/${encoded}`, {
+    signal: AbortSignal.timeout(5000),
+  });
+  if (!res.ok) return null;
+  const data = await res.json() as any;
+  if (!data?.result) return null;
+  return {
+    region: data.result.region || data.result.country || '',
+    adminDistrict: data.result.admin_district || '',
+    country: data.result.country || 'England',
+  };
+}
+
+async function fetchEPCData(postcode: string): Promise<EPCRecord[] | null> {
+  const apiKey = process.env.EPC_API_KEY;
+  const email = process.env.EPC_EMAIL;
+  if (!apiKey || !email) return null;
+  const creds = Buffer.from(`${email}:${apiKey}`).toString('base64');
+  const encoded = encodeURIComponent(postcode.trim());
+  const res = await fetch(
+    `https://epc.opendatacommunities.org/api/v1/domestic/search?postcode=${encoded}&size=25`,
+    { headers: { Authorization: `Basic ${creds}`, Accept: 'application/json' }, signal: AbortSignal.timeout(7000) }
+  );
+  if (!res.ok) return null;
+  const data = await res.json() as any;
+  return (data?.rows ?? [])
+    .map((r: any) => ({
+      address: [r['address1'], r['address2']].filter(Boolean).join(', '),
+      energyRating: r['current-energy-rating'] || '',
+      floorArea: parseFloat(r['total-floor-area'] || r['floor-area'] || '0') || 0,
+      inspectionDate: r['inspection-date'] || '',
+    }))
+    .filter((r: EPCRecord) => r.energyRating);
+}
+
+// ─── Prompt builder ───────────────────────────────────────────────────────────
+
+function buildPrompt(
+  property: PropertyRequest,
+  comparables: LRComparable[],
+  postcodeInfo: PostcodeInfo | null,
+  epcData: EPCRecord[] | null
+): string {
+  const leaseholdInfo =
+    property.tenure === 'leasehold'
+      ? `\n- Service charge: £${property.serviceCharge}/yr, Ground rent: £${property.groundRent}/yr, Lease remaining: ${property.leaseYears} years`
+      : '';
+
+  // ── Comparable stats ──────────────────────────────────────────────────────
+  const cutoff3yr = new Date();
+  cutoff3yr.setFullYear(cutoff3yr.getFullYear() - 3);
+  const cutoff1yr = new Date();
+  cutoff1yr.setFullYear(cutoff1yr.getFullYear() - 1);
+  const cutoff2yr = new Date();
+  cutoff2yr.setFullYear(cutoff2yr.getFullYear() - 2);
+
+  const recent = comparables.filter((c) => new Date(c.date) >= cutoff3yr);
+  const sameType = recent.filter((c) => c.propertyType === property.propertyType);
+  const display = (sameType.length >= 3 ? sameType : recent).slice(0, 12);
+
+  const avg = (arr: LRComparable[]) =>
+    arr.length ? Math.round(arr.reduce((s, c) => s + c.price, 0) / arr.length) : null;
+
+  const allAvg = avg(recent);
+  const typeAvg = avg(sameType);
+  const last12Avg = avg(recent.filter((c) => new Date(c.date) >= cutoff1yr));
+  const prev12Avg = avg(recent.filter((c) => { const d = new Date(c.date); return d >= cutoff2yr && d < cutoff1yr; }));
+
+  let trendLine = 'Insufficient data for trend';
+  if (last12Avg && prev12Avg) {
+    const pct = (((last12Avg - prev12Avg) / prev12Avg) * 100).toFixed(1);
+    trendLine = `${Number(pct) >= 0 ? '+' : ''}${pct}% year-on-year (last 12m avg £${last12Avg.toLocaleString()} vs prior 12m £${prev12Avg.toLocaleString()})`;
+  }
+
+  const pricePct =
+    typeAvg
+      ? `${property.askingPrice > typeAvg ? '+' : ''}${(((property.askingPrice - typeAvg) / typeAvg) * 100).toFixed(1)}% vs comparable average`
+      : 'N/A';
+
+  const impliedPsqm =
+    typeAvg && property.sizeSqm ? `~£${Math.round(typeAvg / property.sizeSqm).toLocaleString()}/sqm` : 'N/A';
+
+  const comparableLines =
+    display.length > 0
+      ? display.map((c) => {
+          const d = new Date(c.date).toLocaleDateString('en-GB', { month: 'short', year: 'numeric' });
+          return `  • ${c.address || 'Address not disclosed'}: £${c.price.toLocaleString()} (${d}, ${c.propertyType}, ${c.tenure}${c.newBuild ? ', new build' : ''})`;
+        }).join('\n')
+      : '  • No comparable sales found for this postcode in the last 3 years';
+
+  // ── EPC stats ─────────────────────────────────────────────────────────────
+  let epcSection = '';
+  if (epcData && epcData.length > 0) {
+    const withArea = epcData.filter((e) => e.floorArea > 0);
+    const areaAvg = withArea.length ? Math.round(withArea.reduce((s, e) => s + e.floorArea, 0) / withArea.length) : 0;
+    const ratings = epcData.map((e) => e.energyRating).filter(Boolean);
+    const topRating = ratings.sort((a, b) => ratings.filter((v) => v === b).length - ratings.filter((v) => v === a).length)[0];
+    epcSection = `
+EPC Register (${epcData.length} certificates in postcode):
+  • Most common energy rating: ${topRating}
+  • Average floor area in this postcode: ${areaAvg ? areaAvg + ' sqm' : 'N/A'}
+  • Subject property (${property.sizeSqm} sqm) is ${areaAvg ? `${Math.abs(property.sizeSqm - areaAvg)} sqm ${property.sizeSqm >= areaAvg ? 'above' : 'below'} postcode average` : 'N/A'}`;
+  }
+
+  const areaLine = postcodeInfo
+    ? `Area: ${postcodeInfo.adminDistrict}${postcodeInfo.region ? ', ' + postcodeInfo.region : ''}`
+    : '';
+
+  return `You are a UK property valuation expert with access to real market data. Analyze this property and base your valuation on the actual Land Registry sold prices provided.
+
+PROPERTY:
+- Address: ${property.address}, ${property.postcode}
+- Asking price: £${property.askingPrice.toLocaleString()}
+- Type: ${property.propertyType}, ${property.bedrooms} bed, ${property.sizeSqm} sqm, built ${property.yearBuilt}
+- Tenure: ${property.tenure}${leaseholdInfo}
+${areaLine}
+
+════════════ REAL MARKET DATA ════════════
+
+Land Registry sold prices — ${property.postcode} (last 3 years, ${recent.length} total transactions):
+${comparableLines}
+
+Statistics:
+  • ${sameType.length} comparable ${property.propertyType}(s) sold in postcode (last 3 years)
+  • Average sold price — all types: ${allAvg ? '£' + allAvg.toLocaleString() : 'N/A'}
+  • Average sold price — ${property.propertyType}s: ${typeAvg ? '£' + typeAvg.toLocaleString() : 'N/A'}
+  • Implied price per sqm (${property.propertyType}): ${impliedPsqm}
+  • Asking price vs comparables: ${pricePct}
+  • Price trend: ${trendLine}${epcSection}
+
+══════════════════════════════════════════
+
+Using the real data above, provide a thorough analysis. Reference specific sold prices. If asking price deviates significantly from comparables, explain why (condition premium, renovation, leasehold issues, etc.).
+
+Confidence in your valuation should be HIGH (75–95) if ≥5 comparable sales exist, MEDIUM (45–74) if 2–4 exist, LOW (20–44) if 0–1 exist.
+
+Respond with ONLY valid JSON, no other text:
+{
+  "valuation": {"amount": 287500, "confidence": 78},
+  "verdict": "FAIR",
+  "savings": 2500,
+  "red_flags": [{"title": "...", "description": "...", "impact": 12000}],
+  "warnings": [{"title": "...", "description": "...", "impact": 3000}],
+  "positives": [{"title": "...", "description": "...", "impact": 5000}]
+}
+
+Rules:
+- verdict: "GOOD_DEAL" | "FAIR" | "OVERPRICED"
+- savings: asking − valuation (positive = buyer saves, negative = overpaying)
+- confidence: 0–100 integer
+- impact: £ values, positive integers
+- At least 2 items per category
+- Cite actual comparable prices in descriptions`;
+}
+
 // Serve built React frontend
 const clientDist = path.join(__dirname, '..', '..', 'client', 'dist');
 if (fs.existsSync(clientDist)) {
@@ -147,44 +362,21 @@ app.post('/api/analyze', rateLimit, async (req, res) => {
   try {
     const property: PropertyRequest = req.body;
 
-    const leaseholdInfo =
-      property.tenure === 'leasehold'
-        ? `\n- Service charge: £${property.serviceCharge}/yr, Ground rent: £${property.groundRent}/yr, Lease remaining: ${property.leaseYears} years`
-        : '';
+    // Fetch real market data concurrently — gracefully degrade if any fail
+    const [lrResult, postcodeResult, epcResult] = await Promise.allSettled([
+      fetchLRComparables(property.postcode),
+      fetchPostcodeInfo(property.postcode),
+      fetchEPCData(property.postcode),
+    ]);
 
-    const prompt = `You are a UK property valuation expert. Analyze this UK property and provide a detailed assessment.
+    const comparables = lrResult.status === 'fulfilled' ? lrResult.value : [];
+    const postcodeInfo = postcodeResult.status === 'fulfilled' ? postcodeResult.value : null;
+    const epcData = epcResult.status === 'fulfilled' ? epcResult.value : null;
 
-Property Details:
-- Address: ${property.address}, ${property.postcode}
-- Asking Price: £${property.askingPrice.toLocaleString()}
-- Type: ${property.propertyType}, ${property.bedrooms} bedrooms, ${property.sizeSqm}sqm
-- Year Built: ${property.yearBuilt}
-- Tenure: ${property.tenure}${leaseholdInfo}
+    if (lrResult.status === 'rejected') console.warn('Land Registry fetch failed:', lrResult.reason?.message);
+    if (postcodeResult.status === 'rejected') console.warn('Postcodes.io fetch failed:', postcodeResult.reason?.message);
 
-Provide a thorough analysis considering:
-1. Fair market valuation based on location, size, type, and local market conditions
-2. Red flags - serious issues with financial impact >£5,000
-3. Warnings - moderate concerns with £1,000-£5,000 impact
-4. Positive factors - features that add value or reduce risk
-
-Be realistic and specific to the UK property market. Consider postcode-specific factors.
-
-You MUST respond with ONLY valid JSON in this exact format, no other text:
-{
-  "valuation": {"amount": 287500, "confidence": 3.2},
-  "verdict": "FAIR",
-  "savings": 2500,
-  "red_flags": [{"title": "Example Issue", "description": "Detailed explanation", "impact": 12000}],
-  "warnings": [{"title": "Example Warning", "description": "Detailed explanation", "impact": 3000}],
-  "positives": [{"title": "Example Positive", "description": "Detailed explanation", "impact": 5000}]
-}
-
-Where:
-- verdict is one of: "GOOD_DEAL", "FAIR", or "OVERPRICED"
-- savings is the difference between asking price and your valuation (positive = buyer saves, negative = premium)
-- impact values are in £ (positive numbers)
-- Include at least 2 items in each category
-- Be specific about the location and realistic about UK property values`;
+    const prompt = buildPrompt(property, comparables, postcodeInfo, epcData);
 
     const message = await anthropic.messages.create({
       model: 'claude-sonnet-4-20250514',
@@ -193,16 +385,30 @@ Where:
     });
 
     const content = message.content[0];
-    if (content.type !== 'text') {
-      throw new Error('Unexpected response type');
-    }
+    if (content.type !== 'text') throw new Error('Unexpected response type');
 
     const jsonMatch = content.text.match(/\{[\s\S]*\}/);
-    if (!jsonMatch) {
-      throw new Error('Could not parse JSON from response');
-    }
+    if (!jsonMatch) throw new Error('Could not parse JSON from response');
 
     const analysis = JSON.parse(jsonMatch[0]);
+
+    // Attach metadata so the frontend can show which data sources were used
+    const recent3yr = comparables.filter((c) => {
+      const cut = new Date(); cut.setFullYear(cut.getFullYear() - 3); return new Date(c.date) >= cut;
+    });
+    const sameType = recent3yr.filter((c) => c.propertyType === property.propertyType);
+    analysis.dataSources = {
+      landRegistry: recent3yr.length > 0 ? {
+        total: recent3yr.length,
+        sameType: sameType.length,
+        avgPrice: sameType.length
+          ? Math.round(sameType.reduce((s, c) => s + c.price, 0) / sameType.length)
+          : (recent3yr.length ? Math.round(recent3yr.reduce((s, c) => s + c.price, 0) / recent3yr.length) : null),
+      } : null,
+      epc: !!(epcData && epcData.length > 0),
+      postcode: !!postcodeInfo,
+    };
+
     res.json(analysis);
   } catch (error: any) {
     console.error('Analysis error:', error?.status, error?.message);
@@ -248,7 +454,7 @@ app.post('/api/demo', rateLimit, (req, res) => {
   const valuation = Math.round(price * 0.965);
 
   res.json({
-    valuation: { amount: valuation, confidence: 3.2 },
+    valuation: { amount: valuation, confidence: 62 },
     verdict: 'FAIR',
     savings: price - valuation,
     red_flags: [

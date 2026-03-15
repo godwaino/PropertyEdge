@@ -18,6 +18,12 @@ export interface AnalysisItem {
   impact: number;
 }
 
+export interface DataSources {
+  landRegistry: { total: number; sameType: number; avgPrice: number | null } | null;
+  epc: boolean;
+  postcode: boolean;
+}
+
 export interface AnalysisResult {
   valuation: { amount: number; confidence: number };
   verdict: 'GOOD_DEAL' | 'FAIR' | 'OVERPRICED';
@@ -25,4 +31,5 @@ export interface AnalysisResult {
   red_flags: AnalysisItem[];
   warnings: AnalysisItem[];
   positives: AnalysisItem[];
+  dataSources?: DataSources;
 }
