@@ -41,12 +41,11 @@ export default function Header() {
       <h1 className="text-4xl sm:text-5xl font-black tracking-tight leading-none">
         <span className="gradient-text">Property</span>
         <span className="text-white">Edge</span>
-        <span className="gradient-text-gold ml-2 text-2xl font-light align-middle">AI</span>
       </h1>
 
       {/* Subtitle */}
       <p className="text-slate-400 mt-3 text-sm font-medium tracking-wide">
-        AI-powered UK property analysis &mdash; know before you buy
+        Smart UK property analysis &mdash; know before you buy
       </p>
 
       {/* Trust badges */}
@@ -54,7 +53,7 @@ export default function Header() {
         {[
           { icon: '⚡', label: 'Instant Analysis' },
           { icon: '🏠', label: 'UK Properties' },
-          { icon: '🤖', label: 'Claude AI' },
+          { icon: '🔍', label: 'Deep Insights' },
         ].map(({ icon, label }) => (
           <span
             key={label}

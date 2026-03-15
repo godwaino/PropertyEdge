@@ -307,6 +307,146 @@ app.post('/api/demo', rateLimit, (req, res) => {
   });
 });
 
+// Parse a Rightmove or Zoopla listing URL and extract property data
+app.post('/api/parse-listing', async (req, res) => {
+  const { url } = req.body as { url?: string };
+  if (!url || typeof url !== 'string') {
+    res.status(400).json({ error: 'Missing url' });
+    return;
+  }
+
+  let parsedUrl: URL;
+  try {
+    parsedUrl = new URL(url);
+  } catch {
+    res.status(400).json({ error: 'Invalid URL' });
+    return;
+  }
+
+  const hostname = parsedUrl.hostname.replace(/^www\./, '');
+  if (hostname !== 'rightmove.co.uk' && hostname !== 'zoopla.co.uk') {
+    res.status(400).json({ error: 'Only Rightmove and Zoopla URLs are supported' });
+    return;
+  }
+
+  let html: string;
+  try {
+    const response = await fetch(url, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+        'Accept': 'text/html,application/xhtml+xml,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+        'Accept-Language': 'en-GB,en;q=0.9',
+      },
+      signal: AbortSignal.timeout(10000),
+    });
+    if (!response.ok) {
+      res.status(502).json({ error: `Listing page returned ${response.status}. The site may be blocking automated access.` });
+      return;
+    }
+    html = await response.text();
+  } catch (err: any) {
+    res.status(502).json({ error: `Failed to fetch listing: ${err.message}` });
+    return;
+  }
+
+  const extracted: Partial<{
+    address: string; postcode: string; askingPrice: number;
+    propertyType: string; bedrooms: number; sizeSqm: number;
+    yearBuilt: number; tenure: string;
+    serviceCharge: number; groundRent: number; leaseYears: number;
+  }> = {};
+
+  if (hostname === 'rightmove.co.uk') {
+    // Rightmove embeds window.PAGE_MODEL JSON in a script tag
+    const modelMatch = html.match(/window\.PAGE_MODEL\s*=\s*(\{[\s\S]*?\});\s*\n/);
+    if (modelMatch) {
+      try {
+        const model = JSON.parse(modelMatch[1]);
+        const prop = model?.propertyData;
+        if (prop) {
+          extracted.askingPrice = prop.prices?.primaryPrice
+            ? parseInt(String(prop.prices.primaryPrice).replace(/[^0-9]/g, ''), 10)
+            : undefined;
+          extracted.address = prop.address?.displayAddress;
+          extracted.postcode = prop.address?.outcode
+            ? `${prop.address.outcode} ${prop.address.incode || ''}`.trim()
+            : undefined;
+          extracted.bedrooms = prop.bedrooms;
+          extracted.propertyType = prop.propertySubType?.toLowerCase().replace(/ /g, '-');
+          const sqft = prop.floorplanImages?.[0]?.resizedFloorplanUrls?.find(() => true);
+          if (prop.sizeSqFeet) extracted.sizeSqm = Math.round(prop.sizeSqFeet * 0.0929);
+          extracted.tenure = prop.tenure?.tenureName?.toLowerCase().includes('lease') ? 'leasehold' : 'freehold';
+          extracted.leaseYears = prop.tenure?.yearsRemainingOnLease;
+        }
+      } catch { /* fallback to regex */ }
+    }
+
+    // Regex fallbacks
+    if (!extracted.askingPrice) {
+      const m = html.match(/["']price["']:\s*["']?(\d[\d,]+)["']?/);
+      if (m) extracted.askingPrice = parseInt(m[1].replace(/,/g, ''), 10);
+    }
+    if (!extracted.bedrooms) {
+      const m = html.match(/(\d+)\s+bedroom/i);
+      if (m) extracted.bedrooms = parseInt(m[1], 10);
+    }
+    if (!extracted.address) {
+      const m = html.match(/<title>([^|<]+)/);
+      if (m) extracted.address = m[1].trim();
+    }
+    if (!extracted.postcode) {
+      const m = html.match(/\b([A-Z]{1,2}\d{1,2}[A-Z]?\s*\d[A-Z]{2})\b/i);
+      if (m) extracted.postcode = m[1].toUpperCase();
+    }
+  } else {
+    // Zoopla — try __PRELOADED_STATE__ or JSON-LD
+    const stateMatch = html.match(/window\.__PRELOADED_STATE__\s*=\s*(\{[\s\S]*?\});\s*\n/);
+    if (stateMatch) {
+      try {
+        const state = JSON.parse(stateMatch[1]);
+        const listing = state?.listing?.listingDetails || state?.propertyDetails;
+        if (listing) {
+          extracted.askingPrice = listing.price?.amount ?? listing.pricing?.price;
+          extracted.address = listing.address?.displayAddress;
+          extracted.postcode = listing.address?.postcode;
+          extracted.bedrooms = listing.numBedrooms ?? listing.details?.numBedrooms;
+          extracted.tenure = listing.details?.tenure?.toLowerCase().includes('lease') ? 'leasehold' : 'freehold';
+          if (listing.details?.floorArea?.value) {
+            const area = listing.details.floorArea;
+            extracted.sizeSqm = area.units === 'sqm' ? area.value : Math.round(area.value * 0.0929);
+          }
+        }
+      } catch { /* fallback */ }
+    }
+
+    if (!extracted.askingPrice) {
+      const m = html.match(/["']price["']:\s*["']?(\d[\d,]+)["']?/);
+      if (m) extracted.askingPrice = parseInt(m[1].replace(/,/g, ''), 10);
+    }
+    if (!extracted.bedrooms) {
+      const m = html.match(/(\d+)\s+bedroom/i);
+      if (m) extracted.bedrooms = parseInt(m[1], 10);
+    }
+    if (!extracted.postcode) {
+      const m = html.match(/\b([A-Z]{1,2}\d{1,2}[A-Z]?\s*\d[A-Z]{2})\b/i);
+      if (m) extracted.postcode = m[1].toUpperCase();
+    }
+    if (!extracted.address) {
+      const m = html.match(/<title>([^|<]+)/);
+      if (m) extracted.address = m[1].trim();
+    }
+  }
+
+  // Clean up undefined values
+  Object.keys(extracted).forEach((k) => {
+    if ((extracted as any)[k] === undefined || (extracted as any)[k] === null || isNaN((extracted as any)[k])) {
+      delete (extracted as any)[k];
+    }
+  });
+
+  res.json(extracted);
+});
+
 app.get('/api/health', (_req, res) => {
   res.json({
     status: 'ok',
