@@ -22,6 +22,9 @@ export interface DataSources {
   landRegistry: { total: number; sameType: number; avgPrice: number | null } | null;
   epc: boolean;
   postcode: boolean;
+  crime: { total: number; months: number } | null;
+  floodRisk: { zone3: boolean; zone2: boolean } | null;
+  unemployment: { rate: number; area: string } | null;
 }
 
 export interface AnalysisResult {

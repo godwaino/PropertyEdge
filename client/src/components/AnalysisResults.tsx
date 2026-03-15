@@ -172,34 +172,58 @@ function Section({
 function DataSourcesRow({ ds }: { ds?: DataSources }) {
   if (!ds) return null;
 
-  const chips: { label: string; active: boolean; detail?: string }[] = [
+  const floodLabel = ds.floodRisk
+    ? ds.floodRisk.zone3 ? 'Zone 3 — HIGH RISK' : ds.floodRisk.zone2 ? 'Zone 2 — medium risk' : 'Low risk'
+    : 'Unavailable';
+  const floodActive = !!ds.floodRisk;
+  const floodAlert = ds.floodRisk?.zone3 || ds.floodRisk?.zone2;
+
+  const chips: { label: string; active: boolean; detail?: string; alert?: boolean }[] = [
     {
       label: 'Land Registry',
       active: !!ds.landRegistry,
       detail: ds.landRegistry
-        ? `${ds.landRegistry.total} sold price${ds.landRegistry.total !== 1 ? 's' : ''}${ds.landRegistry.sameType ? ` · ${ds.landRegistry.sameType} comparable` : ''}`
+        ? `${ds.landRegistry.total} sale${ds.landRegistry.total !== 1 ? 's' : ''}${ds.landRegistry.sameType ? ` · ${ds.landRegistry.sameType} comparable` : ''}`
         : 'No sales data',
     },
-    { label: 'Postcodes.io', active: ds.postcode, detail: ds.postcode ? 'Area data' : 'Unavailable' },
+    { label: 'Postcodes.io', active: ds.postcode, detail: ds.postcode ? 'Area profile' : 'Unavailable' },
     { label: 'EPC Register', active: ds.epc, detail: ds.epc ? 'Energy & size data' : 'No key configured' },
+    {
+      label: 'Flood Risk',
+      active: floodActive,
+      detail: floodLabel,
+      alert: floodAlert ?? false,
+    },
+    {
+      label: 'Crime',
+      active: !!ds.crime,
+      detail: ds.crime ? `${ds.crime.total} incidents · ${ds.crime.months}mo` : 'Unavailable',
+    },
+    {
+      label: 'ONS Unemployment',
+      active: !!ds.unemployment,
+      detail: ds.unemployment ? `${ds.unemployment.rate.toFixed(1)}% · ${ds.unemployment.area}` : 'Unavailable',
+    },
   ];
 
   return (
     <div className="border-t border-navy-border/40 px-5 py-3 flex flex-wrap items-center gap-2">
       <span className="text-xs text-slate-600 mr-1">Data sources:</span>
-      {chips.map(({ label, active, detail }) => (
+      {chips.map(({ label, active, detail, alert }) => (
         <span
           key={label}
           title={detail}
           className={`inline-flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-full border transition-colors ${
-            active
+            alert
+              ? 'border-gold/30 bg-gold/8 text-gold'
+              : active
               ? 'border-pe-green/25 bg-pe-green/8 text-pe-green'
               : 'border-navy-border text-slate-600'
           }`}
         >
-          <span className={`w-1.5 h-1.5 rounded-full ${active ? 'bg-pe-green' : 'bg-slate-700'}`} />
+          <span className={`w-1.5 h-1.5 rounded-full ${alert ? 'bg-gold' : active ? 'bg-pe-green' : 'bg-slate-700'}`} />
           {label}
-          {active && detail && <span className="opacity-60">· {detail}</span>}
+          {active && detail && <span className="opacity-60 ml-0.5">· {detail}</span>}
         </span>
       ))}
     </div>
