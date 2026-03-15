@@ -68,7 +68,7 @@ export default function LoadingState() {
           </div>
 
           <h3 className="text-white font-semibold text-base">Analyzing Property</h3>
-          <p className="text-slate-500 text-sm mt-1">Claude AI is evaluating your property...</p>
+          <p className="text-slate-500 text-sm mt-1">Running deep analysis on your property...</p>
         </div>
 
         {/* Progress bar */}

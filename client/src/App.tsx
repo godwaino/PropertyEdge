@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import Header from './components/Header';
 import PropertyForm from './components/PropertyForm';
 import AnalysisResults from './components/AnalysisResults';
@@ -12,6 +12,7 @@ export default function App() {
   const [error, setError] = useState<string | null>(null);
   const [demoMode, setDemoMode] = useState(false);
   const [apiKeyConfigured, setApiKeyConfigured] = useState(false);
+  const resultsRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     fetch('/api/health')
@@ -28,6 +29,7 @@ export default function App() {
     setResult(null);
     setError(null);
     setLastProperty(property);
+    setTimeout(() => resultsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 50);
 
     try {
       const endpoint = demoMode ? '/api/demo' : '/api/analyze';
@@ -126,11 +128,13 @@ export default function App() {
             </div>
           )}
 
-          {isLoading && <LoadingState />}
+          <div ref={resultsRef} className="scroll-mt-6">
+            {isLoading && <LoadingState />}
 
-          {result && lastProperty && !isLoading && (
-            <AnalysisResults result={result} property={lastProperty} />
-          )}
+            {result && lastProperty && !isLoading && (
+              <AnalysisResults result={result} property={lastProperty} />
+            )}
+          </div>
         </main>
       </div>
     </div>
