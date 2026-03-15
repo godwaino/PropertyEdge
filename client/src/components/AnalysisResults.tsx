@@ -1,4 +1,4 @@
-import { AnalysisResult, AnalysisItem, PropertyInput } from '../types/property';
+import { AnalysisResult, AnalysisItem, PropertyInput, DataSources } from '../types/property';
 
 interface Props {
   result: AnalysisResult;
@@ -169,6 +169,43 @@ function Section({
   );
 }
 
+function DataSourcesRow({ ds }: { ds?: DataSources }) {
+  if (!ds) return null;
+
+  const chips: { label: string; active: boolean; detail?: string }[] = [
+    {
+      label: 'Land Registry',
+      active: !!ds.landRegistry,
+      detail: ds.landRegistry
+        ? `${ds.landRegistry.total} sold price${ds.landRegistry.total !== 1 ? 's' : ''}${ds.landRegistry.sameType ? ` · ${ds.landRegistry.sameType} comparable` : ''}`
+        : 'No sales data',
+    },
+    { label: 'Postcodes.io', active: ds.postcode, detail: ds.postcode ? 'Area data' : 'Unavailable' },
+    { label: 'EPC Register', active: ds.epc, detail: ds.epc ? 'Energy & size data' : 'No key configured' },
+  ];
+
+  return (
+    <div className="border-t border-navy-border/40 px-5 py-3 flex flex-wrap items-center gap-2">
+      <span className="text-xs text-slate-600 mr-1">Data sources:</span>
+      {chips.map(({ label, active, detail }) => (
+        <span
+          key={label}
+          title={detail}
+          className={`inline-flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-full border transition-colors ${
+            active
+              ? 'border-pe-green/25 bg-pe-green/8 text-pe-green'
+              : 'border-navy-border text-slate-600'
+          }`}
+        >
+          <span className={`w-1.5 h-1.5 rounded-full ${active ? 'bg-pe-green' : 'bg-slate-700'}`} />
+          {label}
+          {active && detail && <span className="opacity-60">· {detail}</span>}
+        </span>
+      ))}
+    </div>
+  );
+}
+
 export default function AnalysisResults({ result, property }: Props) {
   const delta = result.valuation.amount - property.askingPrice;
   const deltaPercent = ((delta / property.askingPrice) * 100).toFixed(1);
@@ -195,7 +232,7 @@ export default function AnalysisResults({ result, property }: Props) {
           <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-6">
             {/* Valuation */}
             <div>
-              <p className="text-xs text-slate-500 uppercase tracking-widest mb-1">AI Valuation</p>
+              <p className="text-xs text-slate-500 uppercase tracking-widest mb-1">Estimated Valuation</p>
               <p className="text-4xl font-black text-white tracking-tight">
                 {formatCurrency(result.valuation.amount)}
               </p>
@@ -244,6 +281,9 @@ export default function AnalysisResults({ result, property }: Props) {
             </div>
           ))}
         </div>
+
+        {/* Data sources row */}
+        <DataSourcesRow ds={result.dataSources} />
       </div>
 
       {/* Detail sections */}
