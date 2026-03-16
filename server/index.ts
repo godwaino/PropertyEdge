@@ -632,15 +632,74 @@ app.post('/api/analyze', rateLimit, async (req, res) => {
   }
 });
 
-// Demo endpoint — always works, no API key needed
-app.post('/api/demo', rateLimit, (req, res) => {
+// Demo endpoint — always works, no API key needed; still fetches real data
+app.post('/api/demo', rateLimit, async (req, res) => {
   const property: PropertyRequest = req.body;
   const price = property.askingPrice || 285000;
-  const valuation = Math.round(price * 0.965);
+
+  // Fetch real data using the same pipeline as /api/analyze
+  let postcodeInfo: PostcodeInfo | null = null;
+  let comparables: LRComparable[] = [];
+  let epcData: EPCRecord[] | null = null;
+  let crimeStats: CrimeStats | null = null;
+  let floodRisk: FloodRisk | null = null;
+  let unemployment: UnemploymentData | null = null;
+
+  try {
+    postcodeInfo = await fetchPostcodeInfo(property.postcode).catch(() => null);
+    const [lrResult, epcResult, crimeResult, floodResult, unemploymentResult] = await Promise.allSettled([
+      fetchLRComparables(property.postcode),
+      fetchEPCData(property.postcode),
+      postcodeInfo?.latitude != null
+        ? fetchCrimeStats(postcodeInfo.latitude, postcodeInfo.longitude!)
+        : Promise.resolve(null),
+      postcodeInfo?.latitude != null
+        ? fetchFloodRisk(postcodeInfo.latitude, postcodeInfo.longitude!)
+        : Promise.resolve(null),
+      postcodeInfo?.adminDistrict
+        ? fetchUnemployment(postcodeInfo.adminDistrictCode, postcodeInfo.adminDistrict)
+        : Promise.resolve(null),
+    ]);
+    comparables = lrResult.status === 'fulfilled' ? lrResult.value : [];
+    epcData    = epcResult.status === 'fulfilled' ? epcResult.value : null;
+    crimeStats = crimeResult.status === 'fulfilled' ? crimeResult.value : null;
+    floodRisk  = floodResult.status === 'fulfilled' ? floodResult.value : null;
+    unemployment = unemploymentResult.status === 'fulfilled' ? unemploymentResult.value : null;
+  } catch {
+    // data fetch failed — fall back to hardcoded values below
+  }
+
+  // Derive valuation from real Land Registry data if available
+  const cut = new Date(); cut.setFullYear(cut.getFullYear() - 3);
+  const recent3yr = comparables.filter((c) => new Date(c.date) >= cut);
+  const sameType  = recent3yr.filter((c) => c.propertyType === property.propertyType);
+  const avgMarketPrice = sameType.length
+    ? Math.round(sameType.reduce((s, c) => s + c.price, 0) / sameType.length)
+    : recent3yr.length
+      ? Math.round(recent3yr.reduce((s, c) => s + c.price, 0) / recent3yr.length)
+      : null;
+
+  const valuation = avgMarketPrice ?? Math.round(price * 0.965);
+  const confidence = avgMarketPrice ? Math.min(90, 50 + recent3yr.length * 2) : 62;
+  const priceDiff  = avgMarketPrice ? (price - avgMarketPrice) / avgMarketPrice : 0;
+  const verdict    = priceDiff > 0.05 ? 'OVERPRICED' : priceDiff < -0.05 ? 'GOOD_DEAL' : 'FAIR';
+
+  const dataSources = {
+    landRegistry: recent3yr.length > 0 ? {
+      total: recent3yr.length,
+      sameType: sameType.length,
+      avgPrice: avgMarketPrice,
+    } : null,
+    epc: !!(epcData && epcData.length > 0),
+    postcode: !!postcodeInfo,
+    crime: crimeStats ? { total: crimeStats.total, months: crimeStats.months } : null,
+    floodRisk: floodRisk ?? null,
+    unemployment: unemployment ? { rate: unemployment.rate, area: unemployment.area } : null,
+  };
 
   res.json({
-    valuation: { amount: valuation, confidence: 62 },
-    verdict: 'FAIR',
+    valuation: { amount: valuation, confidence },
+    verdict,
     savings: price - valuation,
     red_flags: [
       {
@@ -695,6 +754,7 @@ app.post('/api/demo', rateLimit, (req, res) => {
         impact: 10000,
       },
     ],
+    dataSources,
   });
 });
 
