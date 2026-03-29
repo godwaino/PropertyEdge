@@ -1,7 +1,18 @@
 import { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { LogIn, Mail, Lock, Chrome, Layers } from 'lucide-react';
+import { LogIn, Mail, Lock, Chrome } from 'lucide-react';
+
 import { useAuthStore } from '../stores/authStore';
+
+function PeLogo() {
+  return (
+    <svg width="32" height="32" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <rect width="32" height="32" rx="6" fill="#0a1929" />
+      <path d="M16 6L4 16h4v10h16V16h4L16 6z" fill="#00D9FF" />
+      <circle cx="16" cy="19" r="3" fill="#0a1929" />
+    </svg>
+  );
+}
 
 export function SignInPage() {
   const navigate = useNavigate();
@@ -51,9 +62,7 @@ export function SignInPage() {
         {/* Logo */}
         <div className="text-center mb-8">
           <Link to="/" className="inline-flex items-center gap-2">
-            <div className="w-8 h-8 rounded-lg bg-cyan/10 border border-cyan/30 flex items-center justify-center">
-              <Layers size={16} className="text-cyan" />
-            </div>
+            <PeLogo />
             <span className="text-lg font-bold text-charcoal">
               Property<span className="text-cyan">Edge</span>
             </span>

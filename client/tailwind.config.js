@@ -15,9 +15,9 @@ export default {
         },
         // ── Brand accent ─────────────────────────────────────────────────
         cyan: {
-          DEFAULT: '#0D9E76',   // teal-green (CareBirds-style)
-          dark:    '#0A7F5F',   // hover / pressed
-          muted:   '#0D9E7615', // very light tint for backgrounds
+          DEFAULT: '#00D9FF',   // original blue accent
+          dark:    '#00b8d9',   // hover / pressed
+          muted:   '#00D9FF15', // very light tint for backgrounds
         },
         // ── Text & dark UI ────────────────────────────────────────────────
         charcoal: {
@@ -49,12 +49,9 @@ export default {
         'card':       '0 1px 3px rgba(0,0,0,0.07), 0 4px 16px rgba(0,0,0,0.06)',
         'card-hover': '0 4px 12px rgba(0,0,0,0.10), 0 8px 32px rgba(0,0,0,0.08)',
         'card-lg':    '0 8px 32px rgba(0,0,0,0.10), 0 2px 8px rgba(0,0,0,0.06)',
-        // Teal glow for brand highlights
-        'glow-teal':    '0 0 24px rgba(13,158,118,0.20)',
-        'glow-teal-sm': '0 0 10px rgba(13,158,118,0.15)',
-        // Legacy aliases so untouched components don't break
-        'glow-cyan':    '0 0 24px rgba(13,158,118,0.20)',
-        'glow-cyan-sm': '0 0 10px rgba(13,158,118,0.15)',
+        // Blue glow for brand highlights
+        'glow-cyan':    '0 0 24px rgba(0,217,255,0.20)',
+        'glow-cyan-sm': '0 0 10px rgba(0,217,255,0.15)',
         'glow-gold':    '0 0 20px rgba(217,119,6,0.18)',
         'glow-red':     '0 0 20px rgba(220,38,38,0.18)',
         'glow-green':   '0 0 20px rgba(22,163,74,0.18)',
@@ -81,7 +78,7 @@ export default {
         slideUp:     { '0%': { opacity: '0', transform: 'translateY(24px)' }, '100%': { opacity: '1', transform: 'translateY(0)' } },
         slideInRight:{ '0%': { opacity: '0', transform: 'translateX(16px)' }, '100%': { opacity: '1', transform: 'translateX(0)' } },
         scaleIn:     { '0%': { opacity: '0', transform: 'scale(0.92)' }, '100%': { opacity: '1', transform: 'scale(1)' } },
-        pulseGlow:   { '0%, 100%': { boxShadow: '0 0 16px rgba(13,158,118,0.15)' }, '50%': { boxShadow: '0 0 32px rgba(13,158,118,0.35)' } },
+        pulseGlow:   { '0%, 100%': { boxShadow: '0 0 16px rgba(0,217,255,0.15)' }, '50%': { boxShadow: '0 0 32px rgba(0,217,255,0.35)' } },
         shimmer:     { '0%': { backgroundPosition: '-200% 0' }, '100%': { backgroundPosition: '200% 0' } },
         progress:    { '0%': { width: '0%' }, '100%': { width: 'var(--progress-width)' } },
         countUp:     { '0%': { opacity: '0', transform: 'translateY(8px)' }, '100%': { opacity: '1', transform: 'translateY(0)' } },
