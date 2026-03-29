@@ -113,10 +113,10 @@ export function CesiumViewer({
         });
 
         // Dark scene — hide sky elements instead of providing empty textures
-        viewer.scene.skyBox.show = false;
-        viewer.scene.sun.show = false;
-        viewer.scene.moon.show = false;
-        viewer.scene.skyAtmosphere.show = false;
+        if (viewer.scene.skyBox) viewer.scene.skyBox.show = false;
+        if (viewer.scene.sun) viewer.scene.sun.show = false;
+        if (viewer.scene.moon) viewer.scene.moon.show = false;
+        if (viewer.scene.skyAtmosphere) viewer.scene.skyAtmosphere.show = false;
         viewer.scene.backgroundColor = Cesium.Color.fromCssColorString('#080e1a');
         viewer.scene.fog.enabled = true;
         viewer.scene.fog.density = 0.0002;
