@@ -478,6 +478,317 @@ Rules:
 - At least 2 items per category`;
 }
 
+// ─── Full response builder ────────────────────────────────────────────────────
+
+function calcValuationScoreSrv(askingPrice: number, fairValueCentral: number, comparablesCount: number) {
+  const pct = (fairValueCentral - askingPrice) / fairValueCentral;
+  let score: number; let label: string; let verdict: string;
+  if (pct > 0.1) { score = 92; label = 'Excellent Value'; verdict = 'excellent_value'; }
+  else if (pct > 0.05) { score = 84; label = 'Good Value'; verdict = 'good_value'; }
+  else if (pct >= -0.05) { score = 70; label = 'Fair Price'; verdict = 'fair'; }
+  else if (pct >= -0.1) { score = 52; label = 'Slightly Stretched'; verdict = 'slightly_stretched'; }
+  else if (pct >= -0.2) { score = 36; label = 'Overpriced'; verdict = 'overpriced'; }
+  else { score = 18; label = 'Significantly Overpriced'; verdict = 'significantly_overpriced'; }
+  const confidence = comparablesCount >= 5 ? 'high' : comparablesCount >= 2 ? 'medium' : 'low';
+  return { score, confidence, label, verdict };
+}
+
+function calcNeighbourhoodScoreSrv(crimePerMonth: number | null, zone3: boolean, zone2: boolean, unemployment: number | null) {
+  let score = 75;
+  if (crimePerMonth !== null) {
+    if (crimePerMonth < 15) score += 12;
+    else if (crimePerMonth < 30) score += 5;
+    else if (crimePerMonth < 50) score -= 5;
+    else if (crimePerMonth < 80) score -= 15;
+    else score -= 25;
+  }
+  if (zone3) score -= 20;
+  else if (zone2) score -= 8;
+  if (unemployment !== null) {
+    if (unemployment < 2) score += 8;
+    else if (unemployment < 4) score += 3;
+    else if (unemployment > 8) score -= 12;
+    else if (unemployment > 6) score -= 6;
+  }
+  score = Math.max(10, Math.min(98, score));
+  let label: string;
+  if (score >= 85) label = 'Excellent Location';
+  else if (score >= 72) label = 'Very Good';
+  else if (score >= 58) label = 'Good';
+  else if (score >= 44) label = 'Average';
+  else if (score >= 30) label = 'Below Average';
+  else label = 'Poor Location';
+  const dataPoints = [crimePerMonth !== null, unemployment !== null].filter(Boolean).length;
+  return { score, confidence: dataPoints >= 2 ? 'medium' : 'low', label };
+}
+
+function calcRiskScoreSrv(highCount: number, medCount: number, hasCritical: boolean) {
+  let score = 88;
+  if (hasCritical) score = Math.min(score, 35);
+  score -= highCount * 15; score -= medCount * 8;
+  score = Math.max(10, Math.min(95, score));
+  let label: string;
+  if (score >= 80) label = 'Clean Bill of Health';
+  else if (score >= 65) label = 'Minor Considerations';
+  else if (score >= 50) label = 'Review Required';
+  else if (score >= 35) label = 'Notable Risks';
+  else if (score >= 20) label = 'Significant Concerns';
+  else label = 'Critical Risk Found';
+  return { score, confidence: 'medium', label };
+}
+
+const VERDICT_MAP_SRV: Array<[number, string, string]> = [
+  [85, 'strong_buy', 'Strong Buy Signal'],
+  [70, 'good_buy', 'Good Buy'],
+  [60, 'promising_verify', 'Promising — Verify'],
+  [50, 'fair_weak_fit', 'Fair Price, Review Needed'],
+  [40, 'watch_dont_rush', "Watch, Don't Rush"],
+  [25, 'avoid_unless_drops', 'Avoid Unless Price Drops'],
+  [0, 'not_recommended', 'Not Recommended'],
+];
+
+const VERDICT_SUMMARIES: Record<string, string> = {
+  strong_buy: 'Strong signals across valuation, location, and risk. Prioritise this property.',
+  good_buy: 'Positive signals overall. A well-priced property in a sound location.',
+  promising_verify: 'Good potential, but check the flagged concerns before proceeding.',
+  fair_weak_fit: 'Pricing is fair but notable concerns need review before committing.',
+  watch_dont_rush: 'Hold position and monitor. Conditions may improve.',
+  avoid_unless_drops: 'Multiple concerns present. Only worth pursuing at a lower price.',
+  not_recommended: 'Significant concerns across multiple dimensions. Proceed with caution.',
+};
+
+function buildRiskItems(
+  floodRisk: FloodRisk | null,
+  crimeStats: CrimeStats | null,
+  property: PropertyRequest,
+  redFlags: Array<{ title: string; description: string; impact: number }>,
+): Array<{ category: string; severity: string; label: string; explanation: string; source: string; recommendedAction: string; resolved: boolean }> {
+  const risks = [];
+  if (floodRisk?.zone3) {
+    risks.push({ category: 'flood', severity: 'high', label: 'Flood Zone 3 — High Risk', explanation: 'This property is within Flood Zone 3 (>3.3% annual probability). This significantly affects insurance costs and mortgage availability.', source: 'Environment Agency', recommendedAction: 'Obtain a specialist flood report and check insurance availability before proceeding.', resolved: false });
+  } else if (floodRisk?.zone2) {
+    risks.push({ category: 'flood', severity: 'medium', label: 'Flood Zone 2 — Medium Risk', explanation: 'This property is within Flood Zone 2 (0.1–1% annual probability). Insurance premiums may be elevated.', source: 'Environment Agency', recommendedAction: 'Check flood insurance availability and costs. Request flood history from the vendor.', resolved: false });
+  }
+  if (property.tenure === 'leasehold') {
+    if (property.leaseYears && property.leaseYears < 80) {
+      risks.push({ category: 'leasehold', severity: property.leaseYears < 70 ? 'high' : 'medium', label: `Short Lease — ${property.leaseYears} years remaining`, explanation: `Leases under 80 years are harder and more expensive to extend. Under 70 years, many mortgage lenders will decline.`, source: 'Property details', recommendedAction: 'Negotiate a lease extension as a condition of purchase, or factor extension costs into your offer.', resolved: false });
+    }
+    if (property.groundRent && property.groundRent > 250) {
+      risks.push({ category: 'leasehold', severity: 'medium', label: 'High Ground Rent', explanation: `Ground rent of £${property.groundRent}/yr may be subject to doubling clauses. Under the Leasehold Reform Act 2022, future ground rent increases are restricted, but existing doubling clauses in older leases remain a risk.`, source: 'Property details', recommendedAction: 'Have a solicitor review the lease for escalation clauses before exchange.', resolved: false });
+    }
+  }
+  // Add AI-identified red flags as risk items
+  for (const flag of redFlags) {
+    risks.push({ category: 'area', severity: 'high', label: flag.title, explanation: flag.description, source: 'AI analysis', recommendedAction: 'Review and verify this concern before making an offer.', resolved: false });
+  }
+  return risks;
+}
+
+function buildNextStepsSrv(
+  verdict: string,
+  riskItems: Array<{ label: string; severity: string }>,
+  property: PropertyRequest,
+): {
+  primaryRecommendation: string;
+  actionList: string[];
+  viewingChecklist: string[];
+  agentQuestions: string[];
+  negotiationPrompts: string[];
+  unresolvedChecks: string[];
+} {
+  const primaryMap: Record<string, string> = {
+    GOOD_DEAL: 'Prioritise a viewing — this property shows strong value and positive signals.',
+    FAIR: 'Book a viewing to assess condition in person before proceeding.',
+    OVERPRICED: 'Consider whether a lower offer or waiting for a price reduction makes sense.',
+  };
+
+  const viewingChecklist = [
+    'Check all windows and doors open and close properly',
+    'Look for damp patches, mould, or water stains on walls and ceilings',
+    'Test water pressure in kitchen and bathrooms',
+    'Check boiler age and service history',
+    'Inspect loft space if accessible',
+    'Check condition of external walls and roof from outside',
+    'Assess natural light and noise levels',
+    'Check mobile signal strength throughout',
+    'Check parking arrangements',
+    'Ask about broadband provider and achievable speeds',
+    property.tenure === 'leasehold' ? 'Ask to see service charge accounts for last 3 years' : 'Check condition of boundary fencing and gates',
+    'Ask about any known disputes with neighbours',
+  ];
+
+  const agentQuestions = [
+    'How long has the property been on the market?',
+    'Has the asking price been reduced since listing?',
+    'Are there any offers already made?',
+    'Why are the current owners selling?',
+    'What is included in the sale?',
+    property.tenure === 'leasehold' ? 'Can you provide the latest service charge accounts and any planned major works?' : 'Are there any boundary disputes?',
+    'Has the property had any structural work done?',
+    'What is the average utility bill cost?',
+  ];
+
+  const actionList: string[] = [
+    primaryMap[verdict] ?? 'Proceed with careful due diligence.',
+    'Research comparable sold prices on HM Land Registry to validate the valuation.',
+    ...riskItems.slice(0, 2).map(r => `Investigate flagged concern: "${r.label}"`),
+    'Instruct a solicitor and commission a RICS survey before exchange.',
+  ];
+
+  return {
+    primaryRecommendation: primaryMap[verdict] ?? 'Continue with careful due diligence before making any commitment.',
+    actionList,
+    viewingChecklist,
+    agentQuestions,
+    negotiationPrompts: [],
+    unresolvedChecks: riskItems.filter(r => r.severity === 'high').map(r => r.label),
+  };
+}
+
+function buildFullResponse(
+  property: PropertyRequest,
+  analysis: any,
+  comparables: LRComparable[],
+  postcodeInfo: PostcodeInfo | null,
+  epcData: EPCRecord[] | null,
+  crimeStats: CrimeStats | null,
+  floodRisk: FloodRisk | null,
+  unemployment: UnemploymentData | null,
+  demoMode: boolean,
+): any {
+  const analysisId = `anlys-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+  const fairValueCentral = analysis.valuation?.amount ?? Math.round(property.askingPrice * 0.97);
+  const fairValueLow = Math.round(fairValueCentral * 0.95);
+  const fairValueHigh = Math.round(fairValueCentral * 1.05);
+
+  const cutoff3yr = new Date(); cutoff3yr.setFullYear(cutoff3yr.getFullYear() - 3);
+  const recent = comparables.filter(c => new Date(c.date) >= cutoff3yr);
+  const sameType = recent.filter(c => c.propertyType === property.propertyType);
+  const comparablesForReport = (sameType.length >= 3 ? sameType : recent).slice(0, 10);
+
+  const vScore = calcValuationScoreSrv(property.askingPrice, fairValueCentral, comparablesForReport.length);
+  const nScore = calcNeighbourhoodScoreSrv(
+    crimeStats?.perMonth ?? null,
+    floodRisk?.zone3 ?? false,
+    floodRisk?.zone2 ?? false,
+    unemployment?.rate ?? null,
+  );
+
+  const riskItems = buildRiskItems(floodRisk, crimeStats, property, analysis.red_flags ?? []);
+  const hasCritical = riskItems.some(r => r.severity === 'critical');
+  const highCount = riskItems.filter(r => r.severity === 'high').length;
+  const medCount = riskItems.filter(r => r.severity === 'medium').length;
+  const rScore = calcRiskScoreSrv(highCount, medCount, hasCritical);
+
+  const overallScore = Math.round(vScore.score * 0.35 + nScore.score * 0.30 + rScore.score * 0.35);
+  const [, verdictCode, verdictLabel] = VERDICT_MAP_SRV.find(([min]) => overallScore >= min) ?? VERDICT_MAP_SRV[VERDICT_MAP_SRV.length - 1];
+
+  const nextSteps = buildNextStepsSrv(analysis.verdict, riskItems, property);
+
+  const epcRating = epcData?.[0]?.energyRating ?? null;
+  const epcFloorArea = epcData?.[0]?.floorArea ?? null;
+
+  // Build negotiation angles from the valuation context
+  const savingsAbs = Math.abs(analysis.savings ?? 0);
+  const negotiationAngles: string[] = [];
+  if (analysis.savings < 0) {
+    negotiationAngles.push(`Asking price is ${Math.abs(Math.round(((property.askingPrice - fairValueCentral) / fairValueCentral) * 100))}% above estimated fair value based on recent comparables.`);
+  }
+  if (floodRisk?.zone2 || floodRisk?.zone3) {
+    negotiationAngles.push('Flood risk classification may increase insurance costs — factor this into your offer price.');
+  }
+  if (property.tenure === 'leasehold' && property.leaseYears && property.leaseYears < 80) {
+    negotiationAngles.push(`Short lease (${property.leaseYears} years) means likely extension costs — factor an estimated £${(Math.round((85 - property.leaseYears) * 800 / 1000) * 1000).toLocaleString()} into your offer.`);
+  }
+  if (comparablesForReport.length < 3) {
+    negotiationAngles.push('Limited comparable sales data — ask agent for evidence supporting the asking price.');
+  }
+
+  return {
+    analysisId,
+    status: 'complete',
+    demoMode,
+
+    scores: {
+      valuation: { score: vScore.score, confidence: vScore.confidence, label: vScore.label },
+      neighbourhood: { score: nScore.score, confidence: nScore.confidence, label: nScore.label },
+      risk: { score: rScore.score, confidence: rScore.confidence, label: rScore.label },
+      overall: { score: overallScore, label: verdictLabel, verdictCode, summary: VERDICT_SUMMARIES[verdictCode] ?? '' },
+    },
+
+    valuationReport: {
+      askingPrice: property.askingPrice,
+      fairValueLow,
+      fairValueCentral,
+      fairValueHigh,
+      pricingVerdict: vScore.verdict,
+      pricingVerdictLabel: vScore.label,
+      confidenceScore: analysis.valuation?.confidence ?? 50,
+      confidenceLabel: vScore.confidence === 'high' ? 'High confidence' : vScore.confidence === 'medium' ? 'Moderate confidence' : 'Low confidence — limited comparable data',
+      comparables: comparablesForReport.map(c => ({
+        address: c.address, price: c.price, date: c.date,
+        propertyType: c.propertyType, tenure: c.tenure, newBuild: c.newBuild,
+      })),
+      comparablesCount: comparablesForReport.length,
+      negotiationAngles,
+      valuationNarrative: `Based on ${comparablesForReport.length} comparable ${property.propertyType} sales in ${property.postcode}, the estimated fair value range is £${fairValueLow.toLocaleString()}–£${fairValueHigh.toLocaleString()} with a central estimate of £${fairValueCentral.toLocaleString()}. The asking price of £${property.askingPrice.toLocaleString()} is ${analysis.savings >= 0 ? `£${analysis.savings.toLocaleString()} below` : `£${Math.abs(analysis.savings ?? 0).toLocaleString()} above`} this estimate.`,
+      marketContextNote: '',
+      savings: analysis.savings ?? 0,
+    },
+
+    neighbourhoodReport: {
+      postcode: property.postcode,
+      region: postcodeInfo?.region ?? '',
+      adminDistrict: postcodeInfo?.adminDistrict ?? '',
+      lat: postcodeInfo?.latitude ?? null,
+      lng: postcodeInfo?.longitude ?? null,
+      crime: crimeStats ? {
+        totalLast3Months: crimeStats.total,
+        perMonthAverage: crimeStats.perMonth,
+        topCategories: crimeStats.topCategories.map(c => ({ category: c.label, count: c.count })),
+        contextNote: `${crimeStats.total} incidents recorded within approximately 1 mile over ${crimeStats.months} months.`,
+        dataMonths: crimeStats.months,
+      } : null,
+      floodRisk: floodRisk ? {
+        zone3HighRisk: floodRisk.zone3,
+        zone2MediumRisk: floodRisk.zone2,
+        label: floodRisk.zone3 ? 'High Risk — Flood Zone 3' : floodRisk.zone2 ? 'Medium Risk — Flood Zone 2' : 'Low Risk',
+        severity: floodRisk.zone3 ? 'high' : floodRisk.zone2 ? 'medium' : 'low',
+      } : null,
+      environment: {
+        unemploymentRate: unemployment?.rate ?? null,
+        unemploymentArea: unemployment?.area ?? null,
+        epcRating,
+        floorAreaSqM: epcFloorArea,
+      },
+      characterNarrative: '',
+    },
+
+    riskReport: {
+      risks: riskItems,
+      criticalRiskFound: hasCritical,
+      riskNarrative: riskItems.length === 0
+        ? 'No significant risks were identified from the available data.'
+        : `${riskItems.length} risk item${riskItems.length !== 1 ? 's' : ''} identified — review before proceeding.`,
+    },
+
+    nextSteps,
+
+    // Legacy fields (backward compat)
+    valuation: analysis.valuation,
+    verdict: analysis.verdict,
+    savings: analysis.savings,
+    red_flags: analysis.red_flags ?? [],
+    warnings: analysis.warnings ?? [],
+    positives: analysis.positives ?? [],
+    dataSources: analysis.dataSources,
+
+    generatedAt: new Date().toISOString(),
+    dataFreshnessWarnings: [],
+    missingDataFlags: comparablesForReport.length < 3 ? ['Limited comparable sales data — confidence reduced'] : [],
+  };
+}
+
 // Serve built React frontend
 const clientDist = path.join(__dirname, '..', '..', 'client', 'dist');
 if (fs.existsSync(clientDist)) {
@@ -554,9 +865,9 @@ app.post('/api/analyze', rateLimit, async (req, res) => {
     const floodRisk = floodResult.status === 'fulfilled' ? floodResult.value : null;
     const unemployment = unemploymentResult.status === 'fulfilled' ? unemploymentResult.value : null;
 
-    if (lrResult.status === 'rejected') console.warn('Land Registry:', lrResult.reason?.message);
-    if (crimeResult.status === 'rejected') console.warn('Police UK:', crimeResult.reason?.message);
-    if (floodResult.status === 'rejected') console.warn('Flood risk:', floodResult.reason?.message);
+    if (lrResult.status === 'rejected') console.warn('Land Registry:', (lrResult as PromiseRejectedResult).reason?.message);
+    if (crimeResult.status === 'rejected') console.warn('Police UK:', (crimeResult as PromiseRejectedResult).reason?.message);
+    if (floodResult.status === 'rejected') console.warn('Flood risk:', (floodResult as PromiseRejectedResult).reason?.message);
 
     const prompt = buildPrompt(property, comparables, postcodeInfo, epcData, crimeStats, floodRisk, unemployment);
 
@@ -594,7 +905,8 @@ app.post('/api/analyze', rateLimit, async (req, res) => {
       unemployment: unemployment ? { rate: unemployment.rate, area: unemployment.area } : null,
     };
 
-    res.json(analysis);
+    const fullResponse = buildFullResponse(property, analysis, comparables, postcodeInfo, epcData, crimeStats, floodRisk, unemployment, false);
+    res.json(fullResponse);
   } catch (error: any) {
     console.error('Analysis error:', error?.status, error?.message);
 
@@ -634,68 +946,81 @@ app.post('/api/analyze', rateLimit, async (req, res) => {
 
 // Demo endpoint — always works, no API key needed
 app.post('/api/demo', rateLimit, (req, res) => {
-  const property: PropertyRequest = req.body;
-  const price = property.askingPrice || 285000;
-  const valuation = Math.round(price * 0.965);
+  const raw = req.body as Partial<PropertyRequest>;
+  const property: PropertyRequest = {
+    address: raw.address || '14 Hartwell Close',
+    postcode: raw.postcode || 'RG1 3AB',
+    askingPrice: raw.askingPrice || 285000,
+    propertyType: raw.propertyType || 'terraced',
+    bedrooms: raw.bedrooms || 3,
+    sizeSqm: raw.sizeSqm || 85,
+    yearBuilt: raw.yearBuilt || 1935,
+    tenure: raw.tenure || 'freehold',
+    serviceCharge: raw.serviceCharge || 0,
+    groundRent: raw.groundRent || 0,
+    leaseYears: raw.leaseYears || 0,
+  };
 
-  res.json({
-    valuation: { amount: valuation, confidence: 62 },
+  const price = property.askingPrice;
+  const fairValue = Math.round(price * 0.965);
+  const savings = price - fairValue;
+
+  const demoAnalysis = {
+    valuation: { amount: fairValue, confidence: 62 },
     verdict: 'FAIR',
-    savings: price - valuation,
+    savings,
     red_flags: [
-      {
-        title: 'Leasehold Ground Rent Escalation Risk',
-        description: `Ground rent of £${property.groundRent || 250}/yr may be subject to escalation clauses. Check the lease for doubling clauses which could make the property unmortgageable in future. This is a known issue in ${property.postcode || 'this area'} for properties built around ${property.yearBuilt || 2019}.`,
-        impact: 15000,
-      },
-      {
-        title: 'Service Charge Above Area Average',
-        description: `At £${property.serviceCharge || 1200}/yr, the service charge is approximately 18% above the average for comparable ${property.propertyType || 'flat'}s in ${property.postcode || 'this postcode'}. Over a 10-year period this represents significant additional cost.`,
-        impact: 8500,
-      },
+      { title: 'Period Property Maintenance Costs', description: `Built in ${property.yearBuilt}, this property may require significant maintenance investment. Period features such as sash windows and original masonry require specialist upkeep.`, impact: 8000 },
     ],
     warnings: [
-      {
-        title: 'EWS1 Fire Safety Certificate',
-        description: `Properties built around ${property.yearBuilt || 2019} in this area may require an EWS1 form. If the building has cladding, obtaining this certificate can delay sales and incur remediation costs.`,
-        impact: 4000,
-      },
-      {
-        title: 'Limited Parking in City Centre',
-        description: `${property.address || 'This property'} is in a city centre location where allocated parking is scarce. Lack of parking can reduce resale appeal and may cost £1,500-3,000/yr for a nearby space.`,
-        impact: 2500,
-      },
-      {
-        title: 'Potential Management Company Issues',
-        description:
-          'Leasehold flats in large developments can face management company disputes. Request the last 3 years of service charge accounts and check for any planned major works.',
-        impact: 3000,
-      },
+      { title: 'EPC Rating Unknown', description: 'Energy efficiency data was not available for this postcode. Request the full EPC certificate from the agent before proceeding.', impact: 3000 },
+      { title: 'Limited Parking', description: `${property.address} may have limited on-street parking. Verify dedicated parking availability during viewing.`, impact: 2500 },
     ],
     positives: [
-      {
-        title: 'Modern Build with NHBC Warranty',
-        description: `Built in ${property.yearBuilt || 2019}, this property likely still has NHBC warranty coverage (10 years from completion). This protects against structural defects and reduces risk.`,
-        impact: 12000,
-      },
-      {
-        title: 'Prime City Centre Location',
-        description: `${property.postcode || 'M3'} is a high-demand area with strong rental yields (5-6%) and consistent capital appreciation. Proximity to transport links supports long-term value.`,
-        impact: 20000,
-      },
-      {
-        title: 'Good Size for Property Type',
-        description: `At ${property.sizeSqm || 85}sqm, this ${property.bedrooms || 2}-bed ${property.propertyType || 'flat'} is above average size for the area. Larger units command premium prices.`,
-        impact: 8000,
-      },
-      {
-        title: '999-Year Lease',
-        description:
-          'With 999 years remaining, the lease length is effectively equivalent to freehold. No lease extension costs will be needed.',
-        impact: 10000,
-      },
+      { title: 'Strong Local Demand Area', description: `${property.postcode} benefits from good transport links and consistent buyer demand. Properties in this postcode have shown stable pricing over the past 24 months.`, impact: 12000 },
+      { title: 'Freehold Tenure', description: 'Freehold ownership provides full rights over the property and land. No lease extension costs or ground rent obligations.', impact: 8000 },
+      { title: `Good Size for ${property.bedrooms}-Bed Property`, description: `At ${property.sizeSqm}sqm, this property is well-proportioned for the bedroom count and compares favourably to recent comparable sales in the area.`, impact: 6000 },
     ],
-  });
+    dataSources: {
+      landRegistry: { total: 8, sameType: 4, avgPrice: fairValue + 3000 },
+      epc: false, postcode: true,
+      crime: { total: 42, months: 3 },
+      floodRisk: { zone3: false, zone2: false },
+      unemployment: { rate: 3.2, area: 'Reading' },
+    },
+  };
+
+  const demoComparables: LRComparable[] = [
+    { price: fairValue - 5000, date: '2024-11-01', propertyType: property.propertyType, tenure: property.tenure, address: '8 Hartwell Close', newBuild: false },
+    { price: fairValue + 8000, date: '2024-09-15', propertyType: property.propertyType, tenure: property.tenure, address: '22 Hartwell Close', newBuild: false },
+    { price: fairValue - 2000, date: '2024-07-20', propertyType: property.propertyType, tenure: property.tenure, address: '6 Elmwood Road', newBuild: false },
+    { price: fairValue + 12000, date: '2024-05-10', propertyType: property.propertyType, tenure: property.tenure, address: '31 Kennet Way', newBuild: false },
+  ];
+
+  const demoPostcode: PostcodeInfo = {
+    region: 'South East', adminDistrict: 'Reading', adminDistrictCode: 'E06000038',
+    country: 'England', ward: 'Church', constituency: 'Reading Central',
+    lsoa: 'Reading 010A', latitude: 51.454, longitude: -0.978,
+  };
+
+  const demoCrime: CrimeStats = {
+    total: 42, months: 3, perMonth: 14,
+    topCategories: [
+      { label: 'Anti-social behaviour', count: 12, pct: 29 },
+      { label: 'Vehicle crime', count: 8, pct: 19 },
+      { label: 'Theft from person', count: 6, pct: 14 },
+    ],
+  };
+
+  const demoFlood: FloodRisk = { zone3: false, zone2: false };
+  const demoUnemployment: UnemploymentData = { rate: 3.2, area: 'Reading', date: 'Jan 2025' };
+
+  const fullResponse = buildFullResponse(
+    property, demoAnalysis, demoComparables, demoPostcode, null, demoCrime, demoFlood, demoUnemployment, true
+  );
+
+  // Add a small delay to simulate real analysis
+  setTimeout(() => res.json(fullResponse), 1200);
 });
 
 // ---------------------------------------------------------------------------
