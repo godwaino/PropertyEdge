@@ -1,6 +1,7 @@
 {
   "framework": null,
-  "buildCommand": "cd client && npm install && npm run build",
+  "installCommand": "cd server && npm install && cd ../client && npm install",
+  "buildCommand": "cd client && npm run build",
   "outputDirectory": "client/dist",
   "rewrites": [
     { "source": "/api/:path*", "destination": "/api/index" },
@@ -8,7 +9,8 @@
   ],
   "functions": {
     "api/index.ts": {
-      "maxDuration": 60
+      "maxDuration": 60,
+      "includeFiles": "server/**"
     }
   }
 }
