@@ -15,7 +15,7 @@ export function EmptyState({ icon, title, description, action }: Props) {
           {icon}
         </div>
       )}
-      <h3 className="text-base font-medium text-white mb-1">{title}</h3>
+      <h3 className="text-base font-medium text-charcoal mb-1">{title}</h3>
       {description && <p className="text-sm text-navy-300 max-w-xs">{description}</p>}
       {action && <div className="mt-6">{action}</div>}
     </div>

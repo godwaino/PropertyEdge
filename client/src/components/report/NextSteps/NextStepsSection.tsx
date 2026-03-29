@@ -29,7 +29,7 @@ export function NextStepsSection({ result }: Props) {
           </div>
           <div>
             <p className="text-xs text-cyan uppercase tracking-wider mb-1">Recommended Next Action</p>
-            <p className="text-white font-medium text-base leading-snug">
+            <p className="text-charcoal font-medium text-base leading-snug">
               {nextSteps.primaryRecommendation}
             </p>
           </div>

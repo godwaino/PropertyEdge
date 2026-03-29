@@ -19,7 +19,7 @@ export function SectionHeader({ title, subtitle, badge, action, icon }: Props) {
         )}
         <div>
           <div className="flex items-center gap-2">
-            <h2 className="text-lg font-semibold text-white">{title}</h2>
+            <h2 className="text-lg font-semibold text-charcoal">{title}</h2>
             {badge}
           </div>
           {subtitle && <p className="text-sm text-navy-300 mt-0.5">{subtitle}</p>}

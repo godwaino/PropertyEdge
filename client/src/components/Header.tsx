@@ -40,7 +40,7 @@ export default function Header() {
       {/* Title */}
       <h1 className="text-4xl sm:text-5xl font-black tracking-tight leading-none">
         <span className="gradient-text">Property</span>
-        <span className="text-white">Edge</span>
+        <span className="text-charcoal">Edge</span>
       </h1>
 
       {/* Subtitle */}

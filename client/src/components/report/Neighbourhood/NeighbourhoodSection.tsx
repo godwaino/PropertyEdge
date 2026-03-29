@@ -16,7 +16,7 @@ function StatRow({ label, value, sub }: { label: string; value: string; sub?: st
     <div className="flex items-start justify-between gap-4 py-2.5 border-b border-navy-border/50 last:border-0">
       <span className="text-sm text-navy-300">{label}</span>
       <div className="text-right">
-        <span className="text-sm font-medium text-white">{value}</span>
+        <span className="text-sm font-medium text-charcoal">{value}</span>
         {sub && <p className="text-xs text-navy-300">{sub}</p>}
       </div>
     </div>
@@ -61,15 +61,15 @@ export function NeighbourhoodSection({ result }: Props) {
           />
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 mb-4">
             <div className="rounded-xl bg-navy-light border border-navy-border p-4 text-center">
-              <p className="text-2xl font-bold text-white tabular-nums">{crime.perMonthAverage.toFixed(0)}</p>
+              <p className="text-2xl font-bold text-charcoal tabular-nums">{crime.perMonthAverage.toFixed(0)}</p>
               <p className="text-xs text-navy-300 mt-1">crimes / month</p>
             </div>
             <div className="rounded-xl bg-navy-light border border-navy-border p-4 text-center">
-              <p className="text-2xl font-bold text-white tabular-nums">{crime.totalLast3Months}</p>
+              <p className="text-2xl font-bold text-charcoal tabular-nums">{crime.totalLast3Months}</p>
               <p className="text-xs text-navy-300 mt-1">last 3 months</p>
             </div>
             <div className="rounded-xl bg-navy-light border border-navy-border p-4 text-center col-span-2 sm:col-span-1">
-              <p className="text-2xl font-bold text-white tabular-nums">{crime.dataMonths}</p>
+              <p className="text-2xl font-bold text-charcoal tabular-nums">{crime.dataMonths}</p>
               <p className="text-xs text-navy-300 mt-1">months of data</p>
             </div>
           </div>
@@ -87,7 +87,7 @@ export function NeighbourhoodSection({ result }: Props) {
                         style={{ width: `${Math.min(100, (cat.count / crime.totalLast3Months) * 100)}%` }}
                       />
                     </div>
-                    <span className="text-xs text-white tabular-nums w-6 text-right">{cat.count}</span>
+                    <span className="text-xs text-charcoal tabular-nums w-6 text-right">{cat.count}</span>
                   </div>
                 ))}
               </div>

@@ -38,7 +38,7 @@ export function ValuationSection({ result }: Props) {
         <div className="flex flex-wrap items-center gap-4 mb-6">
           <div>
             <p className="text-xs text-navy-300 mb-1">Asking Price</p>
-            <p className="text-3xl font-bold text-white tabular-nums">
+            <p className="text-3xl font-bold text-charcoal tabular-nums">
               {formatCurrency(valuationReport.askingPrice)}
             </p>
           </div>
@@ -69,7 +69,7 @@ export function ValuationSection({ result }: Props) {
         <p className="text-sm text-navy-300 leading-relaxed">{valuationReport.valuationNarrative}</p>
         {valuationReport.marketContextNote && (
           <p className="text-sm text-navy-300 leading-relaxed mt-3 pt-3 border-t border-navy-border">
-            <span className="text-white font-medium">Market context: </span>
+            <span className="text-charcoal font-medium">Market context: </span>
             {valuationReport.marketContextNote}
           </p>
         )}

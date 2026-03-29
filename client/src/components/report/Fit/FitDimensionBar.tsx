@@ -28,7 +28,7 @@ export function FitDimensionBar({ label, score, note, weight }: Props) {
     <div className="py-3 border-b border-navy-border/50 last:border-0">
       <div className="flex items-center justify-between mb-2">
         <div className="flex items-center gap-2">
-          <span className="text-sm text-white">{label}</span>
+          <span className="text-sm text-charcoal">{label}</span>
           {weight >= 8 && (
             <span className="text-[10px] px-1.5 py-0.5 rounded bg-gold/15 text-gold border border-gold/30">
               Priority
@@ -37,7 +37,7 @@ export function FitDimensionBar({ label, score, note, weight }: Props) {
         </div>
         <div className="flex items-center gap-3">
           <span className="text-xs text-navy-300">{fitLabel(roundedScore)}</span>
-          <span className="text-sm font-semibold text-white tabular-nums w-9 text-right">
+          <span className="text-sm font-semibold text-charcoal tabular-nums w-9 text-right">
             {roundedScore}
           </span>
         </div>

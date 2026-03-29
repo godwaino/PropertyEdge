@@ -26,7 +26,7 @@ export function AnalysisProgress({ currentStep = 0 }: Props) {
         </div>
       </div>
 
-      <h2 className="text-xl font-semibold text-white text-center mb-2">
+      <h2 className="text-xl font-semibold text-charcoal text-center mb-2">
         Analysing property
       </h2>
       <p className="text-sm text-navy-300 text-center mb-10">
@@ -56,7 +56,7 @@ export function AnalysisProgress({ currentStep = 0 }: Props) {
                 )}
               </div>
               <div>
-                <p className={`text-sm font-medium ${active ? 'text-cyan' : done ? 'text-white' : 'text-navy-300'}`}>
+                <p className={`text-sm font-medium ${active ? 'text-cyan' : done ? 'text-charcoal' : 'text-navy-300'}`}>
                   {step.label}
                 </p>
                 <p className="text-xs text-navy-300">{step.sub}</p>

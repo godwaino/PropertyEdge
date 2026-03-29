@@ -54,7 +54,7 @@ export function DecisionVerdictCard({ overall, askingPrice, fairValueCentral, ad
         <TrendingUp size={18} className={delta >= 0 ? 'text-pe-green' : 'text-pe-red'} />
         <div>
           <p className="text-xs text-navy-300">Asking vs estimated fair value</p>
-          <p className="text-sm font-medium text-white">
+          <p className="text-sm font-medium text-charcoal">
             {formatCurrency(askingPrice)}{' '}
             <span className={`font-semibold ${delta >= 0 ? 'text-pe-green' : 'text-pe-red'}`}>
               ({deltaSign}{formatCurrency(delta, true)} / {deltaSign}{deltaPct}%)

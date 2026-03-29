@@ -34,7 +34,7 @@ function RiskCard({ risk }: { risk: RiskItem }) {
         </div>
         <div className="flex-1 min-w-0">
           <div className="flex items-start justify-between gap-2 mb-1">
-            <p className="text-sm font-medium text-white">{risk.label}</p>
+            <p className="text-sm font-medium text-charcoal">{risk.label}</p>
             <span className={`flex-shrink-0 text-xs px-2 py-0.5 rounded-full border font-medium ${riskSeverityColor(risk.severity)}`}>
               {risk.severity}
             </span>
@@ -135,7 +135,7 @@ export function RiskSection({ result }: Props) {
       {riskItems.length === 0 && (
         <DataCard className="text-center py-8">
           <CheckCircle size={32} className="text-pe-green mx-auto mb-3" />
-          <p className="text-white font-medium">No significant risks identified</p>
+          <p className="text-charcoal font-medium">No significant risks identified</p>
           <p className="text-sm text-navy-300 mt-1">Always verify independently before exchange.</p>
         </DataCard>
       )}

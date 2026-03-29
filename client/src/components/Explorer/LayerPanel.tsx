@@ -13,10 +13,10 @@ export function LayerPanel({ layers, onToggle, onClose }: Props) {
       <div className="flex items-center justify-between px-3 py-2.5 border-b border-navy-border">
         <div className="flex items-center gap-2">
           <Layers size={14} className="text-cyan" />
-          <span className="text-xs font-semibold text-white">Layers</span>
+          <span className="text-xs font-semibold text-charcoal">Layers</span>
         </div>
         {onClose && (
-          <button onClick={onClose} className="text-navy-300 hover:text-white">
+          <button onClick={onClose} className="text-navy-300 hover:text-charcoal">
             <X size={14} />
           </button>
         )}
@@ -27,7 +27,7 @@ export function LayerPanel({ layers, onToggle, onClose }: Props) {
             key={layer.id}
             onClick={() => onToggle(layer.id)}
             className={`w-full flex items-center gap-3 px-3 py-2 text-xs transition-colors hover:bg-navy-light ${
-              layer.enabled ? 'text-white' : 'text-navy-300'
+              layer.enabled ? 'text-charcoal' : 'text-navy-300'
             }`}
           >
             {/* Toggle indicator */}
