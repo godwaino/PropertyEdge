@@ -9,10 +9,24 @@ import type { ExplorerLayer, LayerId, PropertyMarker, CommuteDestination } from 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type CesiumType = typeof import('cesium');
 
+// Overpass API endpoint for POI lookups
+const OVERPASS_URL = 'https://overpass-api.de/api/interpreter';
+
+async function fetchOverpass(query: string): Promise<{ elements: Array<{ id: number; lat?: number; lon?: number; center?: { lat: number; lon: number }; tags?: Record<string, string> }> }> {
+  const res = await fetch(OVERPASS_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: `data=${encodeURIComponent(query)}`,
+  });
+  if (!res.ok) throw new Error('Overpass request failed');
+  return res.json();
+}
+
 interface Props {
   property: PropertyMarker;
   floodHighRisk?: boolean;
   floodMediumRisk?: boolean;
+  crimeScore?: number; // 0–100, higher = more crime
   destinations?: CommuteDestination[];
   onClose?: () => void;
 }
@@ -23,6 +37,7 @@ export function CesiumViewer({
   property,
   floodHighRisk = false,
   floodMediumRisk = false,
+  crimeScore,
   destinations = [],
   onClose,
 }: Props) {
@@ -35,6 +50,171 @@ export function CesiumViewer({
   const [cesiumReady, setCesiumReady] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+
+  // Track entities added per layer so we can remove them when toggled off
+  const poiEntitiesRef = useRef<Map<LayerId, string[]>>(new Map());
+  const fetchingRef = useRef<Set<LayerId>>(new Set());
+
+  const removeLayerEntities = useCallback((layerId: LayerId) => {
+    const viewer = viewerRef.current;
+    if (!viewer) return;
+    const ids = poiEntitiesRef.current.get(layerId) ?? [];
+    ids.forEach(id => {
+      const entity = viewer.entities.getById(id);
+      if (entity) viewer.entities.remove(entity);
+    });
+    poiEntitiesRef.current.delete(layerId);
+  }, []);
+
+  // ─── POI layer effect ──────────────────────────────────────────────────────
+  useEffect(() => {
+    if (!cesiumReady) return;
+    const Cesium = cesiumRef.current;
+    const viewer = viewerRef.current;
+    if (!Cesium || !viewer) return;
+
+    const layerState = (id: LayerId) => layers.find(l => l.id === id)?.enabled ?? false;
+    const hasEntities = (id: LayerId) => (poiEntitiesRef.current.get(id)?.length ?? 0) > 0;
+
+    // ── Crime heat ──────────────────────────────────────────────────────────
+    if (layerState('crime') && !hasEntities('crime')) {
+      const intensity = crimeScore != null ? crimeScore / 100 : 0.5;
+      const ids: string[] = [];
+      // Concentric heat rings at varying radii
+      const rings = [
+        { r: 60,  alpha: intensity * 0.55 },
+        { r: 130, alpha: intensity * 0.35 },
+        { r: 220, alpha: intensity * 0.2  },
+        { r: 340, alpha: intensity * 0.1  },
+      ];
+      rings.forEach(({ r, alpha }, i) => {
+        const id = `crime-ring-${i}`;
+        viewer.entities.add({
+          id,
+          position: Cesium.Cartesian3.fromDegrees(property.lng, property.lat),
+          ellipse: {
+            semiMajorAxis: r,
+            semiMinorAxis: r,
+            material: Cesium.Color.fromCssColorString('#FF4444').withAlpha(alpha),
+            heightReference: Cesium.HeightReference.CLAMP_TO_GROUND,
+          },
+        });
+        ids.push(id);
+      });
+      poiEntitiesRef.current.set('crime', ids);
+    } else if (!layerState('crime') && hasEntities('crime')) {
+      removeLayerEntities('crime');
+    }
+
+    // ── Amenities ───────────────────────────────────────────────────────────
+    if (layerState('amenities') && !hasEntities('amenities') && !fetchingRef.current.has('amenities')) {
+      fetchingRef.current.add('amenities');
+      const q = `[out:json][timeout:20];node(around:1000,${property.lat},${property.lng})[amenity~"^(supermarket|convenience|restaurant|cafe|pharmacy|bank|pub|fast_food|hospital|doctors|dentist|post_office|library)$"];out 60;`;
+      fetchOverpass(q).then(data => {
+        if (!viewerRef.current) return;
+        const ids: string[] = [];
+        const AMENITY_ICON: Record<string, string> = {
+          supermarket: '🛒', convenience: '🏪', restaurant: '🍽️', cafe: '☕',
+          pharmacy: '💊', bank: '🏦', pub: '🍺', fast_food: '🍔',
+          hospital: '🏥', doctors: '👨‍⚕️', dentist: '🦷', post_office: '📮', library: '📚',
+        };
+        data.elements.slice(0, 50).forEach((el, i) => {
+          const lat = el.lat ?? el.center?.lat;
+          const lon = el.lon ?? el.center?.lon;
+          if (lat == null || lon == null) return;
+          const amenity = el.tags?.amenity ?? 'amenity';
+          const icon = AMENITY_ICON[amenity] ?? '📍';
+          const name = el.tags?.name ?? amenity;
+          const id = `amenity-${el.id}-${i}`;
+          viewer.entities.add({
+            id,
+            position: Cesium.Cartesian3.fromDegrees(lon, lat, 1),
+            billboard: {
+              verticalOrigin: Cesium.VerticalOrigin.BOTTOM,
+              heightReference: Cesium.HeightReference.RELATIVE_TO_GROUND,
+              image: createEmojiCanvas(icon),
+              scale: 0.8,
+              disableDepthTestDistance: Number.POSITIVE_INFINITY,
+            },
+            label: {
+              text: name.length > 20 ? name.slice(0, 18) + '…' : name,
+              font: '10px Inter',
+              fillColor: Cesium.Color.WHITE,
+              outlineColor: Cesium.Color.fromCssColorString('#080e1a'),
+              outlineWidth: 2,
+              style: Cesium.LabelStyle.FILL_AND_OUTLINE,
+              verticalOrigin: Cesium.VerticalOrigin.TOP,
+              pixelOffset: new Cesium.Cartesian2(0, -28),
+              heightReference: Cesium.HeightReference.RELATIVE_TO_GROUND,
+              disableDepthTestDistance: Number.POSITIVE_INFINITY,
+              translucencyByDistance: new Cesium.NearFarScalar(200, 1, 800, 0),
+            },
+          });
+          ids.push(id);
+        });
+        poiEntitiesRef.current.set('amenities', ids);
+      }).catch(() => {
+        poiEntitiesRef.current.set('amenities', ['_no_data']);
+      }).finally(() => {
+        fetchingRef.current.delete('amenities');
+      });
+    } else if (!layerState('amenities') && hasEntities('amenities')) {
+      removeLayerEntities('amenities');
+    }
+
+    // ── Green space ─────────────────────────────────────────────────────────
+    if (layerState('greenspace') && !hasEntities('greenspace') && !fetchingRef.current.has('greenspace')) {
+      fetchingRef.current.add('greenspace');
+      const q = `[out:json][timeout:20];(node(around:1500,${property.lat},${property.lng})[leisure~"^(park|garden|nature_reserve|playground)$"];way(around:1500,${property.lat},${property.lng})[leisure~"^(park|garden|nature_reserve)$"];);out center 40;`;
+      fetchOverpass(q).then(data => {
+        if (!viewerRef.current) return;
+        const ids: string[] = [];
+        const seen = new Set<string>();
+        data.elements.slice(0, 40).forEach((el, i) => {
+          const lat = el.lat ?? el.center?.lat;
+          const lon = el.lon ?? el.center?.lon;
+          if (lat == null || lon == null) return;
+          const name = el.tags?.name ?? el.tags?.leisure ?? 'Green Space';
+          const key = `${lat.toFixed(4)},${lon.toFixed(4)}`;
+          if (seen.has(key)) return;
+          seen.add(key);
+          const id = `green-${el.id}-${i}`;
+          viewer.entities.add({
+            id,
+            position: Cesium.Cartesian3.fromDegrees(lon, lat, 1),
+            billboard: {
+              verticalOrigin: Cesium.VerticalOrigin.BOTTOM,
+              heightReference: Cesium.HeightReference.RELATIVE_TO_GROUND,
+              image: createEmojiCanvas('🌳'),
+              scale: 0.9,
+              disableDepthTestDistance: Number.POSITIVE_INFINITY,
+            },
+            label: {
+              text: name.length > 22 ? name.slice(0, 20) + '…' : name,
+              font: '10px Inter',
+              fillColor: Cesium.Color.fromCssColorString('#22C55E'),
+              outlineColor: Cesium.Color.fromCssColorString('#080e1a'),
+              outlineWidth: 2,
+              style: Cesium.LabelStyle.FILL_AND_OUTLINE,
+              verticalOrigin: Cesium.VerticalOrigin.TOP,
+              pixelOffset: new Cesium.Cartesian2(0, -28),
+              heightReference: Cesium.HeightReference.RELATIVE_TO_GROUND,
+              disableDepthTestDistance: Number.POSITIVE_INFINITY,
+              translucencyByDistance: new Cesium.NearFarScalar(200, 1, 1000, 0),
+            },
+          });
+          ids.push(id);
+        });
+        poiEntitiesRef.current.set('greenspace', ids);
+      }).catch(() => {
+        poiEntitiesRef.current.set('greenspace', ['_no_data']);
+      }).finally(() => {
+        fetchingRef.current.delete('greenspace');
+      });
+    } else if (!layerState('greenspace') && hasEntities('greenspace')) {
+      removeLayerEntities('greenspace');
+    }
+  }, [layers, cesiumReady, property.lat, property.lng, crimeScore, removeLayerEntities]);
 
   // Project geo coordinates to screen space (used by Three.js overlay)
   const projectToScreen = useCallback((lat: number, lng: number): ScreenPos | null => {
@@ -385,5 +565,19 @@ function createPinCanvas(color: string, label: string, bgColor: string): HTMLCan
     ctx.fillText(label.slice(0, 1).toUpperCase(), 20, 18);
   }
 
+  return canvas;
+}
+
+// Create a canvas with an emoji for POI billboards
+function createEmojiCanvas(emoji: string): HTMLCanvasElement {
+  const size = 32;
+  const canvas = document.createElement('canvas');
+  canvas.width = size;
+  canvas.height = size;
+  const ctx = canvas.getContext('2d')!;
+  ctx.font = `${size * 0.75}px serif`;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(emoji, size / 2, size / 2);
   return canvas;
 }

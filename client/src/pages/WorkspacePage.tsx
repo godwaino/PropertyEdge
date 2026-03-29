@@ -1,26 +1,28 @@
+import { useState, useEffect } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { AppShell } from '../components/layout/AppShell';
 import { EmptyState } from '../components/ui/EmptyState';
 import { VerdictBadge } from '../components/ui/VerdictBadge';
 import { ScoreBar } from '../components/ui/ScoreBar';
 import { useWorkspaceStore } from '../stores/workspaceStore';
+import { useAuthStore } from '../stores/authStore';
+import { listReports, deleteReport, type SavedReport } from '../lib/firestoreService';
 import type { ShortlistStatus, ShortlistEntry } from '../types/analysis';
 import { formatCurrency, formatRelativeTime, propertyTypeLabel } from '../utils/formatters';
-import { LayoutGrid, Trash2, GitCompare, Home, ArrowRight, BarChart2 } from 'lucide-react';
+import {
+  LayoutGrid, Trash2, GitCompare, Home, ArrowRight, BarChart2,
+  FileText, LogIn, Loader2, Clock,
+} from 'lucide-react';
+
+// ─── Status helpers ──────────────────────────────────────────────────────────
 
 const STATUS_OPTIONS: ShortlistStatus[] = [
   'active', 'watching', 'viewing_booked', 'offer_pending', 'rejected', 'archived',
 ];
-
 const STATUS_LABEL: Record<ShortlistStatus, string> = {
-  active: 'Active',
-  watching: 'Watching',
-  viewing_booked: 'Viewing Booked',
-  offer_pending: 'Offer Pending',
-  rejected: 'Rejected',
-  archived: 'Archived',
+  active: 'Active', watching: 'Watching', viewing_booked: 'Viewing Booked',
+  offer_pending: 'Offer Pending', rejected: 'Rejected', archived: 'Archived',
 };
-
 const STATUS_COLOR: Record<ShortlistStatus, string> = {
   active: 'text-cyan bg-cyan/10 border-cyan/30',
   watching: 'text-gold bg-gold/10 border-gold/30',
@@ -30,13 +32,14 @@ const STATUS_COLOR: Record<ShortlistStatus, string> = {
   archived: 'text-navy-300 bg-navy-light border-navy-border',
 };
 
+// ─── Shortlist card ───────────────────────────────────────────────────────────
+
 function PropertyCard({ entry }: { entry: ShortlistEntry }) {
   const { updateStatus, removeFromShortlist, addToCompare, isInCompare } = useWorkspaceStore();
   const inCompare = isInCompare(entry.analysisId);
 
   return (
     <div className="glass-card rounded-2xl border border-navy-border p-5 hover:border-navy-300/30 transition-colors">
-      {/* Header */}
       <div className="flex items-start justify-between gap-3 mb-3">
         <div className="min-w-0">
           <p className="text-white font-medium truncate">{entry.address}</p>
@@ -44,14 +47,11 @@ function PropertyCard({ entry }: { entry: ShortlistEntry }) {
             {entry.postcode} · {entry.bedrooms}bd · {propertyTypeLabel(entry.propertyType)}
           </p>
         </div>
-        <div className="flex-shrink-0">
-          <span className={`text-xs px-2 py-1 rounded-full border font-medium ${STATUS_COLOR[entry.status]}`}>
-            {STATUS_LABEL[entry.status]}
-          </span>
-        </div>
+        <span className={`flex-shrink-0 text-xs px-2 py-1 rounded-full border font-medium ${STATUS_COLOR[entry.status]}`}>
+          {STATUS_LABEL[entry.status]}
+        </span>
       </div>
 
-      {/* Price + score */}
       <div className="flex items-center gap-4 mb-3">
         <p className="text-lg font-bold text-white tabular-nums">{formatCurrency(entry.askingPrice)}</p>
         {entry.scoreSnapshot && (
@@ -59,14 +59,12 @@ function PropertyCard({ entry }: { entry: ShortlistEntry }) {
         )}
       </div>
 
-      {/* Score bar */}
       {entry.scoreSnapshot && (
         <div className="mb-4">
           <ScoreBar score={entry.scoreSnapshot.overall} size="sm" />
         </div>
       )}
 
-      {/* Footer */}
       <div className="flex items-center gap-2 flex-wrap">
         <Link
           to={`/report/${entry.analysisId}`}
@@ -79,9 +77,7 @@ function PropertyCard({ entry }: { entry: ShortlistEntry }) {
           onClick={() => addToCompare(entry.analysisId)}
           disabled={inCompare}
           className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-medium transition-colors ${
-            inCompare
-              ? 'bg-cyan/10 border-cyan/30 text-cyan'
-              : 'bg-navy-light border-navy-border text-navy-300 hover:text-white'
+            inCompare ? 'bg-cyan/10 border-cyan/30 text-cyan' : 'bg-navy-light border-navy-border text-navy-300 hover:text-white'
           }`}
         >
           <BarChart2 size={12} />
@@ -94,11 +90,8 @@ function PropertyCard({ entry }: { entry: ShortlistEntry }) {
             onChange={e => updateStatus(entry.propertyId, e.target.value as ShortlistStatus)}
             className="text-xs bg-navy-light border border-navy-border rounded-lg px-2 py-1 text-navy-300 focus:outline-none"
           >
-            {STATUS_OPTIONS.map(s => (
-              <option key={s} value={s}>{STATUS_LABEL[s]}</option>
-            ))}
+            {STATUS_OPTIONS.map(s => <option key={s} value={s}>{STATUS_LABEL[s]}</option>)}
           </select>
-
           <button
             onClick={() => removeFromShortlist(entry.propertyId)}
             className="w-7 h-7 rounded-lg hover:bg-pe-red/10 text-navy-300 hover:text-pe-red flex items-center justify-center transition-colors"
@@ -113,6 +106,112 @@ function PropertyCard({ entry }: { entry: ShortlistEntry }) {
   );
 }
 
+// ─── My Reports (Firestore) ───────────────────────────────────────────────────
+
+function MyReports() {
+  const { user } = useAuthStore();
+  const [reports, setReports] = useState<SavedReport[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    if (!user) { setLoading(false); return; }
+    listReports(user.uid)
+      .then(setReports)
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, [user]);
+
+  const handleDelete = async (analysisId: string) => {
+    if (!user) return;
+    await deleteReport(user.uid, analysisId).catch(() => {});
+    setReports(prev => prev.filter(r => r.analysisId !== analysisId));
+  };
+
+  if (!user) {
+    return (
+      <EmptyState
+        icon={<LogIn size={28} />}
+        title="Sign in to see your reports"
+        description="Reports are saved to your account when you're signed in. They're accessible from any device."
+        action={
+          <Link to="/signin" className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-cyan text-navy font-semibold text-sm">
+            Sign in <ArrowRight size={14} />
+          </Link>
+        }
+      />
+    );
+  }
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-16">
+        <Loader2 size={22} className="animate-spin text-cyan" />
+        <span className="ml-3 text-sm text-navy-300">Loading your reports…</span>
+      </div>
+    );
+  }
+
+  if (reports.length === 0) {
+    return (
+      <EmptyState
+        icon={<FileText size={28} />}
+        title="No saved reports yet"
+        description="Analyse a property while signed in and it will appear here."
+        action={
+          <Link to="/analyse" className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-cyan text-navy font-semibold text-sm">
+            Analyse a property <ArrowRight size={14} />
+          </Link>
+        }
+      />
+    );
+  }
+
+  return (
+    <div className="space-y-3">
+      {reports.map(r => (
+        <div
+          key={r.analysisId}
+          className="glass-card rounded-2xl border border-navy-border p-4 flex items-center gap-4 hover:border-navy-300/30 transition-colors"
+        >
+          <div className="min-w-0 flex-1">
+            <p className="text-white font-medium truncate">{r.property.address}</p>
+            <p className="text-xs text-navy-300 mt-0.5">
+              {r.property.postcode} · {formatCurrency(r.property.askingPrice)}
+            </p>
+            <div className="flex items-center gap-1.5 mt-1 text-[11px] text-navy-300/60">
+              <Clock size={10} />
+              {formatRelativeTime(r.savedAt)}
+            </div>
+          </div>
+
+          <div className="flex-shrink-0 flex items-center gap-3">
+            {r.result.scores?.overall && (
+              <div className="text-right">
+                <p className="text-sm font-bold text-white tabular-nums">{r.result.scores.overall.score}</p>
+                <VerdictBadge code={r.result.scores.overall.verdictCode} label={r.result.scores.overall.label} size="sm" />
+              </div>
+            )}
+            <Link
+              to={`/report/${r.analysisId}`}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-navy-light border border-navy-border text-navy-300 hover:text-white text-xs font-medium transition-colors"
+            >
+              Open <ArrowRight size={12} />
+            </Link>
+            <button
+              onClick={() => handleDelete(r.analysisId)}
+              className="w-7 h-7 rounded-lg hover:bg-pe-red/10 text-navy-300 hover:text-pe-red flex items-center justify-center transition-colors"
+            >
+              <Trash2 size={12} />
+            </button>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// ─── Compare view ─────────────────────────────────────────────────────────────
+
 function CompareView() {
   const { shortlist, compareIds, removeFromCompare, clearCompare } = useWorkspaceStore();
   const selected = shortlist.filter(e => compareIds.includes(e.analysisId));
@@ -123,11 +222,7 @@ function CompareView() {
         icon={<GitCompare size={28} />}
         title="Select properties to compare"
         description="Add at least 2 properties from your shortlist to start comparing."
-        action={
-          <Link to="/workspace" className="text-sm text-cyan hover:underline">
-            Go to shortlist
-          </Link>
-        }
+        action={<Link to="/workspace" className="text-sm text-cyan hover:underline">Go to shortlist</Link>}
       />
     );
   }
@@ -138,11 +233,8 @@ function CompareView() {
     <div>
       <div className="flex items-center justify-between mb-6">
         <h2 className="text-lg font-semibold text-white">Comparing {selected.length} properties</h2>
-        <button onClick={clearCompare} className="text-xs text-navy-300 hover:text-white">
-          Clear
-        </button>
+        <button onClick={clearCompare} className="text-xs text-navy-300 hover:text-white">Clear</button>
       </div>
-
       <div className="overflow-x-auto">
         <table className="w-full text-sm">
           <thead>
@@ -152,12 +244,7 @@ function CompareView() {
                 <th key={e.propertyId} className="text-center pb-4 px-3 min-w-[180px]">
                   <div className="text-white font-medium truncate">{e.address}</div>
                   <div className="text-xs text-navy-300">{formatCurrency(e.askingPrice)}</div>
-                  <button
-                    onClick={() => removeFromCompare(e.analysisId)}
-                    className="text-[11px] text-navy-300/60 hover:text-navy-300 mt-1"
-                  >
-                    Remove
-                  </button>
+                  <button onClick={() => removeFromCompare(e.analysisId)} className="text-[11px] text-navy-300/60 hover:text-navy-300 mt-1">Remove</button>
                 </th>
               ))}
             </tr>
@@ -180,13 +267,9 @@ function CompareView() {
                           <>
                             <p className={`text-base font-bold tabular-nums ${best ? 'text-pe-green' : 'text-white'}`}>{score}</p>
                             <p className="text-[11px] text-navy-300">{label}</p>
-                            <div className="mt-1">
-                              <ScoreBar score={score} showNumber={false} size="sm" />
-                            </div>
+                            <div className="mt-1"><ScoreBar score={score} showNumber={false} size="sm" /></div>
                           </>
-                        ) : (
-                          <span className="text-navy-300">—</span>
-                        )}
+                        ) : <span className="text-navy-300">—</span>}
                       </td>
                     );
                   })}
@@ -200,69 +283,82 @@ function CompareView() {
   );
 }
 
+// ─── Page ─────────────────────────────────────────────────────────────────────
+
+type TabId = 'shortlist' | 'reports' | 'compare';
+
 export function WorkspacePage() {
   const location = useLocation();
   const isCompare = location.pathname.includes('compare');
+  const [tab, setTab] = useState<TabId>(isCompare ? 'compare' : 'shortlist');
   const { shortlist } = useWorkspaceStore();
+  const { user } = useAuthStore();
 
   return (
     <AppShell>
       <div className="max-w-5xl mx-auto">
-        {/* Header */}
         <div className="flex items-center justify-between mb-6">
-          <div>
-            <h1 className="text-2xl font-bold text-white">
-              {isCompare ? 'Compare' : 'Workspace'}
-            </h1>
-            {!isCompare && (
-              <p className="text-sm text-navy-300 mt-0.5">
-                {shortlist.length} saved {shortlist.length === 1 ? 'property' : 'properties'}
-              </p>
-            )}
-          </div>
-          <div className="flex items-center gap-2">
-            <Link
-              to="/workspace"
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-sm font-medium transition-colors ${
-                !isCompare ? 'bg-cyan/10 border-cyan/20 text-cyan' : 'border-navy-border text-navy-300 hover:text-white'
-              }`}
-            >
-              <LayoutGrid size={14} /> Shortlist
-            </Link>
-            <Link
-              to="/workspace/compare"
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-sm font-medium transition-colors ${
-                isCompare ? 'bg-cyan/10 border-cyan/20 text-cyan' : 'border-navy-border text-navy-300 hover:text-white'
-              }`}
-            >
-              <GitCompare size={14} /> Compare
-            </Link>
-          </div>
+          <h1 className="text-2xl font-bold text-white">Workspace</h1>
+          <Link
+            to="/analyse"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-cyan text-navy text-sm font-semibold hover:bg-cyan/90 transition-colors"
+          >
+            New analysis <ArrowRight size={14} />
+          </Link>
         </div>
 
-        {isCompare ? (
+        {/* Tabs */}
+        <div className="flex items-center gap-1 mb-6 border-b border-navy-border pb-0">
+          {([
+            { id: 'shortlist', label: 'Shortlist', icon: LayoutGrid, badge: shortlist.length },
+            { id: 'reports',   label: 'My Reports', icon: FileText, badge: 0 },
+            { id: 'compare',   label: 'Compare',    icon: GitCompare, badge: 0 },
+          ] as const).map(({ id, label, icon: Icon, badge }) => (
+            <button
+              key={id}
+              onClick={() => setTab(id)}
+              className={`flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium border-b-2 -mb-px transition-colors ${
+                tab === id
+                  ? 'border-cyan text-cyan'
+                  : 'border-transparent text-navy-300 hover:text-white'
+              }`}
+            >
+              <Icon size={14} />
+              {label}
+              {badge > 0 && (
+                <span className="w-4 h-4 rounded-full bg-cyan/20 text-cyan text-[10px] flex items-center justify-center">
+                  {badge}
+                </span>
+              )}
+            </button>
+          ))}
+        </div>
+
+        {/* Content */}
+        {tab === 'shortlist' && (
+          shortlist.length === 0 ? (
+            <EmptyState
+              icon={<Home size={28} />}
+              title="Your shortlist is empty"
+              description="Analyse a property and save it to start building your shortlist."
+              action={
+                <Link to="/analyse" className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-cyan text-navy font-semibold text-sm">
+                  Analyse a property <ArrowRight size={14} />
+                </Link>
+              }
+            />
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {shortlist.map(entry => <PropertyCard key={entry.propertyId} entry={entry} />)}
+            </div>
+          )
+        )}
+
+        {tab === 'reports' && <MyReports />}
+
+        {tab === 'compare' && (
           <div className="glass-card rounded-2xl border border-navy-border p-6">
             <CompareView />
-          </div>
-        ) : shortlist.length === 0 ? (
-          <EmptyState
-            icon={<Home size={28} />}
-            title="Your shortlist is empty"
-            description="Analyse a property and save it to start building your shortlist."
-            action={
-              <Link
-                to="/analyse"
-                className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-cyan text-navy font-semibold text-sm"
-              >
-                Analyse a property <ArrowRight size={14} />
-              </Link>
-            }
-          />
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {shortlist.map(entry => (
-              <PropertyCard key={entry.propertyId} entry={entry} />
-            ))}
           </div>
         )}
       </div>

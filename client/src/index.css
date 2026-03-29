@@ -158,3 +158,51 @@ input[type='number']::-webkit-inner-spin-button,
 input[type='number']::-webkit-outer-spin-button {
   opacity: 0.4;
 }
+
+/* No scrollbar utility */
+.no-scrollbar::-webkit-scrollbar { display: none; }
+.no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+
+/* ─── Print / PDF export ─────────────────────────────────────────────────── */
+@media print {
+  /* Force light-ish background so ink isn't wasted on #080e1a */
+  body {
+    background: #ffffff !important;
+    color: #0b1828 !important;
+    font-size: 11pt;
+  }
+
+  /* Hide chrome that isn't relevant in a PDF */
+  header,
+  nav,
+  .print\:hidden {
+    display: none !important;
+  }
+
+  /* Glass cards look fine on white if we drop the blur/shadow */
+  .glass-card {
+    background: #f8fafc !important;
+    box-shadow: none !important;
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+    border: 1px solid #cbd5e1 !important;
+  }
+
+  /* Score bars — keep colour, just ensure they're visible */
+  [class*="bg-cyan"]    { background-color: #06b6d4 !important; }
+  [class*="bg-pe-green"]{ background-color: #22c55e !important; }
+  [class*="bg-pe-red"]  { background-color: #ef4444 !important; }
+  [class*="bg-gold"]    { background-color: #d97706 !important; }
+
+  /* Ensure text is dark on white */
+  .text-white  { color: #0f172a !important; }
+  .text-navy-300 { color: #475569 !important; }
+
+  /* Avoid page breaks inside cards */
+  .glass-card { page-break-inside: avoid; break-inside: avoid; }
+
+  /* Section headings start new pages when space is tight */
+  h2 { page-break-before: auto; }
+
+  a { color: #0f172a !important; text-decoration: none !important; }
+}
