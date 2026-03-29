@@ -99,16 +99,24 @@ export function CesiumViewer({
           viewerOptions.terrain = Cesium.Terrain.fromWorldTerrain({ requestWaterMask: true });
         }
 
+        // Disable skybox in options to avoid empty-source WebGL errors
+        viewerOptions.skyBox = false as unknown as undefined;
+
         const viewer = new Cesium.Viewer(containerRef.current, viewerOptions);
         viewerRef.current = viewer;
 
-        // Dark atmosphere
-        viewer.scene.skyBox = new Cesium.SkyBox({
-          sources: {
-            positiveX: '', negativeX: '', positiveY: '',
-            negativeY: '', positiveZ: '', negativeZ: '',
-          },
+        // Suppress Cesium's built-in error dialog — we show our own
+        viewer.scene.renderError.addEventListener((_scene: unknown, err: unknown) => {
+          console.warn('Cesium render error:', err);
+          setError('3D view encountered a rendering error.');
+          setLoading(false);
         });
+
+        // Dark scene — hide sky elements instead of providing empty textures
+        viewer.scene.skyBox.show = false;
+        viewer.scene.sun.show = false;
+        viewer.scene.moon.show = false;
+        viewer.scene.skyAtmosphere.show = false;
         viewer.scene.backgroundColor = Cesium.Color.fromCssColorString('#080e1a');
         viewer.scene.fog.enabled = true;
         viewer.scene.fog.density = 0.0002;
