@@ -1,39 +1,67 @@
+import { useEffect, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { AppShell } from '../components/layout/AppShell';
 import { ReportShell } from '../components/report/ReportShell';
 import { EmptyState } from '../components/ui/EmptyState';
 import { getReport, reportCache } from './AnalysePage';
-import { ArrowLeft, FileQuestion } from 'lucide-react';
+import { loadReport } from '../lib/firestoreService';
+import { useAuthStore } from '../stores/authStore';
+import { ArrowLeft, FileQuestion, Loader2 } from 'lucide-react';
 import type { FullAnalysisResult } from '../types/analysis';
 import type { PropertyInput } from '../types/property';
 
-function getReportWithFallback(id: string) {
+type Entry = { result: FullAnalysisResult; property: PropertyInput };
+
+function getLocal(id: string): Entry | undefined {
   const mem = getReport(id);
   if (mem) return mem;
-  // Try sessionStorage (survives page refresh within same tab)
   try {
     const raw = sessionStorage.getItem(`pe-report-${id}`);
     if (raw) {
-      const entry = JSON.parse(raw) as { result: FullAnalysisResult; property: PropertyInput };
-      reportCache.set(id, entry); // warm in-memory cache
+      const entry = JSON.parse(raw) as Entry;
+      reportCache.set(id, entry);
       return entry;
     }
-  } catch { /* corrupt data — ignore */ }
+  } catch { /* ignore */ }
   return undefined;
 }
 
 export function ReportPage() {
   const { id } = useParams<{ id: string }>();
-  const cached = id ? getReportWithFallback(id) : undefined;
+  const { user } = useAuthStore();
+  const [entry, setEntry] = useState<Entry | undefined>(() => id ? getLocal(id) : undefined);
+  const [checking, setChecking] = useState(!entry && !!user && !!id);
 
-  if (!cached) {
+  useEffect(() => {
+    if (entry || !id || !user) { setChecking(false); return; }
+    setChecking(true);
+    loadReport(user.uid, id).then((remote) => {
+      if (remote) {
+        reportCache.set(id, remote);
+        setEntry(remote);
+      }
+    }).catch(() => {}).finally(() => setChecking(false));
+  }, [id, user]);
+
+  if (checking) {
+    return (
+      <AppShell>
+        <div className="flex items-center justify-center mt-32">
+          <Loader2 size={24} className="animate-spin text-cyan" />
+          <span className="ml-3 text-sm text-navy-300">Loading report…</span>
+        </div>
+      </AppShell>
+    );
+  }
+
+  if (!entry) {
     return (
       <AppShell>
         <div className="max-w-xl mx-auto mt-16">
           <EmptyState
             icon={<FileQuestion size={28} />}
             title="Report not found"
-            description="This report may have expired or the URL is incorrect. Start a new analysis to generate a fresh report."
+            description="This report may have expired. Start a new analysis, or sign in to access your saved reports."
             action={
               <Link
                 to="/analyse"
@@ -58,8 +86,14 @@ export function ReportPage() {
           >
             <ArrowLeft size={14} /> New analysis
           </Link>
+          <Link
+            to="/workspace"
+            className="flex items-center gap-1.5 text-sm text-navy-300 hover:text-white transition-colors"
+          >
+            Workspace
+          </Link>
         </div>
-        <ReportShell result={cached.result} property={cached.property} />
+        <ReportShell result={entry.result} property={entry.property} />
       </div>
     </AppShell>
   );

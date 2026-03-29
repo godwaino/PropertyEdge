@@ -4,7 +4,9 @@ import { AppShell } from '../components/layout/AppShell';
 import { DemoModeBanner } from '../components/input/DemoModeBanner';
 import { AnalysisProgress } from '../components/loading/AnalysisProgress';
 import { useUiStore } from '../stores/uiStore';
+import { useAuthStore } from '../stores/authStore';
 import { analyseProperty, parseListing } from '../api/analyse';
+import { saveReport } from '../lib/firestoreService';
 import type { PropertyInput } from '../types/property';
 import type { FullAnalysisResult } from '../types/analysis';
 import { buildScores } from '../utils/scores';
@@ -34,6 +36,7 @@ const DEFAULTS: PropertyInput = {
 export function AnalysePage() {
   const navigate = useNavigate();
   const { demoMode, apiKeyConfigured } = useUiStore();
+  const { user } = useAuthStore();
 
   const [form, setForm] = useState<PropertyInput>(DEFAULTS);
   const [importedFields, setImportedFields] = useState<Set<string>>(new Set());
@@ -103,7 +106,7 @@ export function AnalysePage() {
         raw.scores = buildScores(raw);
       }
 
-      // Cache result (memory + sessionStorage for page-refresh survival)
+      // Cache result (memory + sessionStorage + Firestore when signed in)
       const id = raw.analysisId ?? `anlys-${Date.now()}`;
       raw.analysisId = id;
       const entry = { result: raw, property: form };
@@ -111,6 +114,9 @@ export function AnalysePage() {
       try {
         sessionStorage.setItem(`pe-report-${id}`, JSON.stringify(entry));
       } catch { /* quota exceeded — graceful degradation */ }
+      if (user && !demoMode) {
+        saveReport(user.uid, entry).catch(() => { /* non-blocking */ });
+      }
 
       navigate(`/report/${id}`);
     } catch (e: unknown) {
