@@ -802,7 +802,7 @@ if (fs.existsSync(clientDist)) {
 let gemini: ReturnType<GoogleGenerativeAI['getGenerativeModel']> | null = null;
 if (process.env.GEMINI_API_KEY) {
   const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-  gemini = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' });
+  gemini = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
   console.log('Gemini API key loaded.');
 } else {
   console.log('No GEMINI_API_KEY found. Live analysis disabled — demo mode still works.');
