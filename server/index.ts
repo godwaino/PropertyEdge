@@ -1319,7 +1319,14 @@ app.get('*', (_req, res) => {
   }
 });
 
-app.listen(Number(PORT), '0.0.0.0', () => {
-  console.log(`\nProperty Edge v2 running at http://localhost:${PORT}`);
-  console.log(`API key: ${process.env.ANTHROPIC_API_KEY ? 'configured' : 'NOT configured (demo mode only)'}\n`);
-});
+// Export for Vercel serverless / testing
+export default app;
+
+// Only bind to a port when running directly (not when imported by Vercel)
+const isMain = process.argv[1] === fileURLToPath(import.meta.url);
+if (isMain) {
+  app.listen(Number(PORT), '0.0.0.0', () => {
+    console.log(`\nProperty Edge v2 running at http://localhost:${PORT}`);
+    console.log(`API key: ${process.env.ANTHROPIC_API_KEY ? 'configured' : 'NOT configured (demo mode only)'}\n`);
+  });
+}
