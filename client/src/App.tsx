@@ -9,6 +9,7 @@ import { WorkspacePage } from './pages/WorkspacePage';
 import { SignInPage } from './pages/SignInPage';
 import { SignUpPage } from './pages/SignUpPage';
 import { ProfilePage } from './pages/ProfilePage';
+import { PrivacyPage, TermsPage } from './pages/PolicyPages';
 import { useUiStore } from './stores/uiStore';
 import { useAuthStore } from './stores/authStore';
 import { checkHealth } from './api/analyse';
@@ -55,6 +56,8 @@ export default function App() {
           <Route path="/signin" element={<SignInPage />} />
           <Route path="/signup" element={<SignUpPage />} />
           <Route path="/profile" element={<ProfilePage />} />
+          <Route path="/privacy" element={<PrivacyPage />} />
+          <Route path="/terms" element={<TermsPage />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </BrowserRouter>
