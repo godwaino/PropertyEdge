@@ -10,7 +10,10 @@
     "build:client": "cd client && npx vite build",
     "build:server": "cd server && npx tsc",
     "start": "cd server && node dist/index.js",
-    "preview": "npm run build && npm start"
+    "preview": "npm run build && npm start",
+    "deploy:hosting": "npm run build:client && firebase deploy --only hosting",
+    "deploy:api": "cd server && gcloud run deploy propertyedge-api --source . --region europe-west2 --allow-unauthenticated --platform managed",
+    "deploy": "npm run deploy:api && npm run deploy:hosting"
   },
   "devDependencies": {
     "concurrently": "^8.2.2"
