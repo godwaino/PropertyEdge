@@ -89,8 +89,9 @@ export const useAuthStore = create<AuthState>()(
     }),
     {
       name: 'pe-auth',
-      // Only persist non-sensitive fields
-      partialize: (s) => ({ isFirebaseConfigured: s.isFirebaseConfigured }),
+      // isFirebaseConfigured must never be persisted — it must always reflect
+      // the live build-time env vars, not a potentially stale cached value.
+      partialize: () => ({}),
     },
   ),
 );
