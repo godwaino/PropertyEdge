@@ -134,7 +134,7 @@ function MyReports() {
         title="Sign in to see your reports"
         description="Reports are saved to your account when you're signed in. They're accessible from any device."
         action={
-          <Link to="/signin" className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-cyan text-white font-semibold text-sm">
+          <Link to="/signin" className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-charcoal text-white font-semibold text-sm">
             Sign in <ArrowRight size={14} />
           </Link>
         }
@@ -158,7 +158,7 @@ function MyReports() {
         title="No saved reports yet"
         description="Analyse a property while signed in and it will appear here."
         action={
-          <Link to="/analyse" className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-cyan text-white font-semibold text-sm">
+          <Link to="/analyse" className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-charcoal text-white font-semibold text-sm">
             Analyse a property <ArrowRight size={14} />
           </Link>
         }
@@ -233,18 +233,18 @@ function CompareView() {
     <div>
       <div className="flex items-center justify-between mb-6">
         <h2 className="text-lg font-semibold text-charcoal">Comparing {selected.length} properties</h2>
-        <button onClick={clearCompare} className="text-xs text-navy-300 hover:text-charcoal">Clear</button>
+        <button onClick={clearCompare} className="text-xs text-charcoal-600 hover:text-charcoal font-medium">Clear</button>
       </div>
       <div className="overflow-x-auto">
         <table className="w-full text-sm">
           <thead>
             <tr>
-              <th className="text-left text-xs text-navy-300 font-medium pb-4 pr-6 w-32">Dimension</th>
+              <th className="text-left text-xs text-charcoal-600 font-semibold pb-4 pr-6 w-32">Dimension</th>
               {selected.map(e => (
                 <th key={e.propertyId} className="text-center pb-4 px-3 min-w-[180px]">
                   <div className="text-charcoal font-medium truncate">{e.address}</div>
                   <div className="text-xs text-navy-300">{formatCurrency(e.askingPrice)}</div>
-                  <button onClick={() => removeFromCompare(e.analysisId)} className="text-[11px] text-navy-300/60 hover:text-navy-300 mt-1">Remove</button>
+                  <button onClick={() => removeFromCompare(e.analysisId)} className="text-[11px] text-charcoal-600 hover:text-charcoal mt-1 font-medium">Remove</button>
                 </th>
               ))}
             </tr>
@@ -301,7 +301,7 @@ export function WorkspacePage() {
           <h1 className="text-2xl font-bold text-charcoal">Workspace</h1>
           <Link
             to="/analyse"
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-cyan text-white text-sm font-semibold hover:bg-cyan/90 transition-colors"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-charcoal text-white text-sm font-semibold hover:bg-charcoal-800 transition-colors"
           >
             New analysis <ArrowRight size={14} />
           </Link>
@@ -342,7 +342,7 @@ export function WorkspacePage() {
               title="Your shortlist is empty"
               description="Analyse a property and save it to start building your shortlist."
               action={
-                <Link to="/analyse" className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-cyan text-white font-semibold text-sm">
+                <Link to="/analyse" className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-charcoal text-white font-semibold text-sm">
                   Analyse a property <ArrowRight size={14} />
                 </Link>
               }

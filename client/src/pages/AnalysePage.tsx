@@ -340,7 +340,7 @@ export function AnalysePage() {
         <button
           onClick={handleAnalyse}
           disabled={!form.address || !form.postcode || !form.askingPrice}
-          className="w-full py-3.5 rounded-xl bg-cyan text-white font-bold text-base hover:bg-cyan/90 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+          className="w-full py-3.5 rounded-xl bg-charcoal text-white font-bold text-base hover:bg-charcoal-800 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
         >
           {demoMode ? 'Run demo analysis' : 'Analyse this property'}
         </button>
