@@ -15,9 +15,9 @@ export default {
         },
         // ── Brand accent ─────────────────────────────────────────────────
         cyan: {
-          DEFAULT: '#00D9FF',   // original blue accent
-          dark:    '#00b8d9',   // hover / pressed
-          muted:   '#00D9FF15', // very light tint for backgrounds
+          DEFAULT: '#0369A1',   // deep sky blue — ~5.4:1 contrast on white
+          dark:    '#075985',   // hover / pressed
+          muted:   '#0369A115', // very light tint for backgrounds
         },
         // ── Text & dark UI ────────────────────────────────────────────────
         charcoal: {
@@ -50,8 +50,8 @@ export default {
         'card-hover': '0 4px 12px rgba(0,0,0,0.10), 0 8px 32px rgba(0,0,0,0.08)',
         'card-lg':    '0 8px 32px rgba(0,0,0,0.10), 0 2px 8px rgba(0,0,0,0.06)',
         // Blue glow for brand highlights
-        'glow-cyan':    '0 0 24px rgba(0,217,255,0.20)',
-        'glow-cyan-sm': '0 0 10px rgba(0,217,255,0.15)',
+        'glow-cyan':    '0 0 24px rgba(3,105,161,0.20)',
+        'glow-cyan-sm': '0 0 10px rgba(3,105,161,0.15)',
         'glow-gold':    '0 0 20px rgba(217,119,6,0.18)',
         'glow-red':     '0 0 20px rgba(220,38,38,0.18)',
         'glow-green':   '0 0 20px rgba(22,163,74,0.18)',
@@ -78,7 +78,7 @@ export default {
         slideUp:     { '0%': { opacity: '0', transform: 'translateY(24px)' }, '100%': { opacity: '1', transform: 'translateY(0)' } },
         slideInRight:{ '0%': { opacity: '0', transform: 'translateX(16px)' }, '100%': { opacity: '1', transform: 'translateX(0)' } },
         scaleIn:     { '0%': { opacity: '0', transform: 'scale(0.92)' }, '100%': { opacity: '1', transform: 'scale(1)' } },
-        pulseGlow:   { '0%, 100%': { boxShadow: '0 0 16px rgba(0,217,255,0.15)' }, '50%': { boxShadow: '0 0 32px rgba(0,217,255,0.35)' } },
+        pulseGlow:   { '0%, 100%': { boxShadow: '0 0 16px rgba(3,105,161,0.15)' }, '50%': { boxShadow: '0 0 32px rgba(3,105,161,0.35)' } },
         shimmer:     { '0%': { backgroundPosition: '-200% 0' }, '100%': { backgroundPosition: '200% 0' } },
         progress:    { '0%': { width: '0%' }, '100%': { width: 'var(--progress-width)' } },
         countUp:     { '0%': { opacity: '0', transform: 'translateY(8px)' }, '100%': { opacity: '1', transform: 'translateY(0)' } },
