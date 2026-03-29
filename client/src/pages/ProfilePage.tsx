@@ -228,7 +228,7 @@ export function ProfilePage() {
             className={`flex items-center gap-2 px-6 py-2.5 rounded-xl text-sm font-semibold transition-all ${
               saved
                 ? 'bg-emerald-500/20 border border-emerald-500/40 text-emerald-400'
-                : 'bg-cyan text-white hover:bg-cyan/90'
+                : 'bg-charcoal text-white hover:bg-charcoal-800'
             }`}
           >
             <Save size={14} />

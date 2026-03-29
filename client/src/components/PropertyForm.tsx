@@ -415,7 +415,7 @@ export default function PropertyForm({ onSubmit, isLoading }: Props) {
         <button
           type="submit"
           disabled={isLoading}
-          className="relative w-full py-3.5 rounded-xl font-semibold text-sm text-white bg-cyan hover:bg-cyan/90 disabled:opacity-40 disabled:cursor-not-allowed transition-all overflow-hidden group shadow-glow-cyan-sm hover:shadow-glow-cyan"
+          className="relative w-full py-3.5 rounded-xl font-semibold text-sm text-white bg-charcoal hover:bg-charcoal-800 disabled:opacity-40 disabled:cursor-not-allowed transition-all overflow-hidden group shadow-glow-cyan-sm hover:shadow-glow-cyan"
         >
           <span className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-700 skew-x-12" />
           <span className="relative flex items-center justify-center gap-2">

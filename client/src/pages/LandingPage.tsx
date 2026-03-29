@@ -73,7 +73,7 @@ export function LandingPage() {
     <div className="min-h-screen bg-navy">
 
       {/* ── Navigation — fixed ─────────────────────────────────────────── */}
-      <header className="fixed top-0 left-0 right-0 z-50 h-14 border-b border-navy-border bg-white/95 backdrop-blur-sm">
+      <header className="fixed top-0 left-0 right-0 z-50 h-14 border-b border-navy-border bg-white shadow-sm">
         <div className="max-w-6xl mx-auto px-6 h-full flex items-center justify-between">
           {/* Brand */}
           <Link to="/" className="flex items-center gap-2.5">
@@ -179,7 +179,7 @@ export function LandingPage() {
 
             <button
               onClick={() => { setDemoMode(true); navigate('/analyse'); }}
-              className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl bg-cyan text-white text-sm font-semibold hover:bg-cyan-dark transition-colors"
+              className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl bg-charcoal text-white text-sm font-semibold hover:bg-charcoal-800 transition-colors"
             >
               View full sample report <ChevronRight size={15} />
             </button>

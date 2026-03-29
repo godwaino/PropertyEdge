@@ -27,7 +27,7 @@ export function TopBar() {
   const { user, signOut } = useAuthStore();
 
   return (
-    <header className="fixed top-0 left-0 right-0 z-50 h-14 border-b border-navy-border bg-white/95 backdrop-blur-sm">
+    <header className="fixed top-0 left-0 right-0 z-50 h-14 border-b border-navy-border bg-white shadow-sm">
       <div className="h-full max-w-7xl mx-auto px-4 flex items-center gap-4">
 
         {/* Logo */}

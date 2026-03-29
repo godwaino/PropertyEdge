@@ -65,7 +65,7 @@ export function ReportPage() {
             action={
               <Link
                 to="/analyse"
-                className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-cyan text-white font-semibold text-sm"
+                className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-charcoal text-white font-semibold text-sm"
               >
                 <ArrowLeft size={14} /> New analysis
               </Link>
