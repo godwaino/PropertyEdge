@@ -305,9 +305,11 @@ export function LandingPage() {
             <span className="font-semibold text-charcoal">PropertyEdge</span>
             <span>© 2025</span>
           </div>
-          <span className="text-center sm:text-right max-w-sm">
-            Not financial or legal advice. Always take independent professional advice before exchanging contracts.
-          </span>
+          <div className="flex items-center gap-4 text-center sm:text-right">
+            <Link to="/privacy" className="hover:text-charcoal transition-colors">Privacy Policy</Link>
+            <Link to="/terms" className="hover:text-charcoal transition-colors">Terms of Service</Link>
+            <span className="hidden sm:block max-w-xs">Not financial or legal advice. Always take independent professional advice before exchanging contracts.</span>
+          </div>
         </div>
       </footer>
     </div>
