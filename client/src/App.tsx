@@ -6,7 +6,11 @@ import { LandingPage } from './pages/LandingPage';
 import { AnalysePage } from './pages/AnalysePage';
 import { ReportPage } from './pages/ReportPage';
 import { WorkspacePage } from './pages/WorkspacePage';
+import { SignInPage } from './pages/SignInPage';
+import { SignUpPage } from './pages/SignUpPage';
+import { ProfilePage } from './pages/ProfilePage';
 import { useUiStore } from './stores/uiStore';
+import { useAuthStore } from './stores/authStore';
 import { checkHealth } from './api/analyse';
 
 const queryClient = new QueryClient({
@@ -15,6 +19,13 @@ const queryClient = new QueryClient({
 
 function AppInit() {
   const { setApiKeyConfigured, setDemoMode } = useUiStore();
+  const { initAuth } = useAuthStore();
+
+  useEffect(() => {
+    // Bootstrap Firebase auth listener
+    const unsubscribe = initAuth();
+    return unsubscribe;
+  }, []);
 
   useEffect(() => {
     checkHealth()
@@ -41,6 +52,9 @@ export default function App() {
           <Route path="/report/:id" element={<ReportPage />} />
           <Route path="/workspace" element={<WorkspacePage />} />
           <Route path="/workspace/compare" element={<WorkspacePage />} />
+          <Route path="/signin" element={<SignInPage />} />
+          <Route path="/signup" element={<SignUpPage />} />
+          <Route path="/profile" element={<ProfilePage />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </BrowserRouter>

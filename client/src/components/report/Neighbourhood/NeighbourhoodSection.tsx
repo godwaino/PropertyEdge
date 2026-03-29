@@ -1,8 +1,9 @@
-import { MapPin, Shield, Droplets, Wifi, TrendingDown, FileText } from 'lucide-react';
+import { MapPin, Shield, Droplets, TrendingDown, FileText } from 'lucide-react';
 import { DataCard } from '../../ui/DataCard';
 import { SectionHeader } from '../../ui/SectionHeader';
 import { ScoreBar } from '../../ui/ScoreBar';
 import { SourceBadge } from '../../ui/SourceBadge';
+import { NeighbourhoodExplorer } from '../../Explorer/NeighbourhoodExplorer';
 import type { FullAnalysisResult } from '../../../types/analysis';
 import { riskSeverityColor } from '../../../utils/scores';
 
@@ -28,6 +29,11 @@ export function NeighbourhoodSection({ result }: Props) {
 
   return (
     <div className="space-y-6 animate-fade-in">
+      {/* 3D / 2D location explorer */}
+      {(neighbourhoodReport.lat && neighbourhoodReport.lng) && (
+        <NeighbourhoodExplorer result={result} />
+      )}
+
       {/* Score headline */}
       <DataCard>
         <SectionHeader

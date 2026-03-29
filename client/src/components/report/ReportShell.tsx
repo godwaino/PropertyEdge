@@ -5,6 +5,7 @@ import { ValuationSection } from './Valuation/ValuationSection';
 import { NeighbourhoodSection } from './Neighbourhood/NeighbourhoodSection';
 import { RiskSection } from './Risks/RiskSection';
 import { NextStepsSection } from './NextSteps/NextStepsSection';
+import { FitSection } from './Fit/FitSection';
 import { VerdictBadge } from '../ui/VerdictBadge';
 import type { FullAnalysisResult } from '../../types/analysis';
 import type { PropertyInput } from '../../types/property';
@@ -17,6 +18,7 @@ const TABS = [
   { id: 'valuation', label: 'Valuation' },
   { id: 'neighbourhood', label: 'Neighbourhood' },
   { id: 'risks', label: 'Risks' },
+  { id: 'fit', label: 'Fit Score' },
   { id: 'next-steps', label: 'Next Steps' },
 ];
 
@@ -103,6 +105,14 @@ export function ReportShell({ result, property }: Props) {
       {activeTab === 'valuation' && <ValuationSection result={result} />}
       {activeTab === 'neighbourhood' && <NeighbourhoodSection result={result} />}
       {activeTab === 'risks' && <RiskSection result={result} />}
+      {activeTab === 'fit' && (
+        <FitSection
+          result={result}
+          askingPrice={property.askingPrice}
+          bedrooms={property.bedrooms}
+          tenure={property.tenure ?? 'Unknown'}
+        />
+      )}
       {activeTab === 'next-steps' && <NextStepsSection result={result} />}
     </div>
   );

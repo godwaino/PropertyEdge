@@ -11,7 +11,7 @@ import { buildScores } from '../utils/scores';
 import { Link, ExternalLink, AlertCircle, Loader2, ChevronDown, ChevronUp } from 'lucide-react';
 
 // Session-level cache: analysisId → FullAnalysisResult
-const reportCache = new Map<string, { result: FullAnalysisResult; property: PropertyInput }>();
+export const reportCache = new Map<string, { result: FullAnalysisResult; property: PropertyInput }>();
 
 export function getReport(id: string) {
   return reportCache.get(id);
@@ -103,10 +103,14 @@ export function AnalysePage() {
         raw.scores = buildScores(raw);
       }
 
-      // Cache result
+      // Cache result (memory + sessionStorage for page-refresh survival)
       const id = raw.analysisId ?? `anlys-${Date.now()}`;
       raw.analysisId = id;
-      reportCache.set(id, { result: raw, property: form });
+      const entry = { result: raw, property: form };
+      reportCache.set(id, entry);
+      try {
+        sessionStorage.setItem(`pe-report-${id}`, JSON.stringify(entry));
+      } catch { /* quota exceeded — graceful degradation */ }
 
       navigate(`/report/${id}`);
     } catch (e: unknown) {

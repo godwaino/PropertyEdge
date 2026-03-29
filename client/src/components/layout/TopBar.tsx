@@ -1,7 +1,8 @@
 import { Link, useLocation } from 'react-router-dom';
-import { Home, LayoutGrid, GitCompare, Bell, Menu, X, Layers } from 'lucide-react';
+import { Home, LayoutGrid, GitCompare, Bell, Menu, X, Layers, UserCircle, LogIn } from 'lucide-react';
 import { useUiStore } from '../../stores/uiStore';
 import { useWorkspaceStore } from '../../stores/workspaceStore';
+import { useAuthStore } from '../../stores/authStore';
 
 const NAV = [
   { to: '/analyse', label: 'Analyse', icon: Home },
@@ -13,6 +14,7 @@ export function TopBar() {
   const location = useLocation();
   const { sidebarOpen, toggleSidebar, demoMode } = useUiStore();
   const { shortlist } = useWorkspaceStore();
+  const { user, signOut } = useAuthStore();
 
   return (
     <header className="fixed top-0 left-0 right-0 z-50 h-14 border-b border-navy-border bg-navy/95 backdrop-blur-md">
@@ -65,6 +67,35 @@ export function TopBar() {
           <button className="w-8 h-8 rounded-lg hover:bg-navy-light flex items-center justify-center text-navy-300 hover:text-white transition-colors relative">
             <Bell size={16} />
           </button>
+
+          {user ? (
+            <div className="hidden sm:flex items-center gap-2">
+              <Link
+                to="/profile"
+                className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-navy-300 hover:text-white hover:bg-navy-light text-sm transition-colors"
+                title={user.email ?? 'Profile'}
+              >
+                <UserCircle size={15} />
+                <span className="hidden lg:block max-w-[100px] truncate text-xs">
+                  {user.displayName ?? user.email}
+                </span>
+              </Link>
+              <button
+                onClick={() => signOut()}
+                className="text-xs text-navy-300 hover:text-white transition-colors px-2 py-1 rounded"
+              >
+                Sign out
+              </button>
+            </div>
+          ) : (
+            <Link
+              to="/signin"
+              className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-navy-border text-navy-300 hover:text-white text-sm font-medium transition-colors"
+            >
+              <LogIn size={14} />
+              Sign in
+            </Link>
+          )}
 
           <Link
             to="/analyse"

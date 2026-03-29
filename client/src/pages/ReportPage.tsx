@@ -2,12 +2,29 @@ import { useParams, Link } from 'react-router-dom';
 import { AppShell } from '../components/layout/AppShell';
 import { ReportShell } from '../components/report/ReportShell';
 import { EmptyState } from '../components/ui/EmptyState';
-import { getReport } from './AnalysePage';
+import { getReport, reportCache } from './AnalysePage';
 import { ArrowLeft, FileQuestion } from 'lucide-react';
+import type { FullAnalysisResult } from '../types/analysis';
+import type { PropertyInput } from '../types/property';
+
+function getReportWithFallback(id: string) {
+  const mem = getReport(id);
+  if (mem) return mem;
+  // Try sessionStorage (survives page refresh within same tab)
+  try {
+    const raw = sessionStorage.getItem(`pe-report-${id}`);
+    if (raw) {
+      const entry = JSON.parse(raw) as { result: FullAnalysisResult; property: PropertyInput };
+      reportCache.set(id, entry); // warm in-memory cache
+      return entry;
+    }
+  } catch { /* corrupt data — ignore */ }
+  return undefined;
+}
 
 export function ReportPage() {
   const { id } = useParams<{ id: string }>();
-  const cached = id ? getReport(id) : undefined;
+  const cached = id ? getReportWithFallback(id) : undefined;
 
   if (!cached) {
     return (
