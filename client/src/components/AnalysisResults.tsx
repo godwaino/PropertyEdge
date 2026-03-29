@@ -149,7 +149,7 @@ function Section({
               <div className="flex items-start gap-3 flex-1 min-w-0">
                 <div className={`w-1.5 h-1.5 rounded-full mt-2 flex-shrink-0 ${c.dot}`} />
                 <div className="min-w-0">
-                  <p className="text-white font-medium text-sm leading-snug">{item.title}</p>
+                  <p className="text-charcoal font-medium text-sm leading-snug">{item.title}</p>
                   <p className="text-slate-500 text-xs mt-1 leading-relaxed">{item.description}</p>
                   <div className={c.bar}>
                     <ImpactBar impact={item.impact} maxImpact={maxImpact} />
@@ -257,7 +257,7 @@ export default function AnalysisResults({ result, property }: Props) {
             {/* Valuation */}
             <div>
               <p className="text-xs text-slate-500 uppercase tracking-widest mb-1">Estimated Valuation</p>
-              <p className="text-4xl font-black text-white tracking-tight">
+              <p className="text-4xl font-black text-charcoal tracking-tight">
                 {formatCurrency(result.valuation.amount)}
               </p>
               <p className="text-slate-500 text-xs mt-1.5">

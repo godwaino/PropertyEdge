@@ -12,7 +12,7 @@ export function UpgradePrompt({ feature, plan = 'paid' }: Props) {
         <Lock size={18} className="text-gold" />
       </div>
       <div className="flex-1 min-w-0">
-        <p className="text-sm font-medium text-white">{feature}</p>
+        <p className="text-sm font-medium text-charcoal">{feature}</p>
         <p className="text-xs text-navy-300 mt-0.5">
           Available on the {plan === 'pro' ? 'Pro' : 'Paid'} plan
         </p>

@@ -9,7 +9,7 @@ interface Props {
 
 export function AppShell({ children, fullWidth = false, noPad = false }: Props) {
   return (
-    <div className="min-h-screen bg-navy">
+    <div className="min-h-screen bg-navy text-charcoal">
       <TopBar />
       <main className={`pt-14 ${noPad ? '' : 'px-4 py-6'} ${fullWidth ? '' : 'max-w-7xl mx-auto'}`}>
         {children}

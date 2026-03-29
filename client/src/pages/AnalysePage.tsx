@@ -143,7 +143,7 @@ export function AnalysePage() {
     <AppShell>
       <div className="max-w-2xl mx-auto">
         <div className="mb-8">
-          <h1 className="text-2xl font-bold text-white mb-1">Analyse a property</h1>
+          <h1 className="text-2xl font-bold text-charcoal mb-1">Analyse a property</h1>
           <p className="text-sm text-navy-300">Paste a listing URL or enter details manually.</p>
         </div>
 
@@ -176,13 +176,13 @@ export function AnalysePage() {
                 onChange={e => setUrlInput(e.target.value)}
                 onKeyDown={e => e.key === 'Enter' && handleImportUrl()}
                 placeholder="https://www.rightmove.co.uk/properties/..."
-                className="w-full pl-8 pr-3 py-2.5 rounded-lg bg-navy-light border border-navy-border text-sm text-white placeholder-navy-300 focus:outline-none focus:border-cyan/50 transition-colors"
+                className="w-full pl-8 pr-3 py-2.5 rounded-lg bg-navy-light border border-navy-border text-sm text-charcoal placeholder-navy-300 focus:outline-none focus:border-cyan/50 transition-colors"
               />
             </div>
             <button
               onClick={handleImportUrl}
               disabled={urlLoading || !urlInput.trim()}
-              className="flex items-center gap-1.5 px-4 py-2.5 rounded-lg bg-cyan text-navy font-semibold text-sm disabled:opacity-40 hover:bg-cyan/90 transition-colors"
+              className="flex items-center gap-1.5 px-4 py-2.5 rounded-lg bg-cyan text-white font-semibold text-sm disabled:opacity-40 hover:bg-cyan/90 transition-colors"
             >
               {urlLoading ? <Loader2 size={14} className="animate-spin" /> : <ExternalLink size={14} />}
               Import
@@ -199,7 +199,7 @@ export function AnalysePage() {
         {/* Manual form toggle */}
         <button
           onClick={() => setShowManual(s => !s)}
-          className="flex items-center gap-2 text-sm text-navy-300 hover:text-white transition-colors mb-4 w-full"
+          className="flex items-center gap-2 text-sm text-navy-300 hover:text-charcoal transition-colors mb-4 w-full"
         >
           {showManual ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
           {showManual ? 'Hide manual entry' : 'Enter details manually'}
@@ -208,7 +208,7 @@ export function AnalysePage() {
         {/* Manual form */}
         {showManual && (
           <div className="glass-card rounded-2xl border border-navy-border p-5 mb-4 space-y-4">
-            <h3 className="text-sm font-semibold text-white">Property Details</h3>
+            <h3 className="text-sm font-semibold text-charcoal">Property Details</h3>
 
             {/* Address */}
             <FieldRow>
@@ -300,7 +300,7 @@ export function AnalysePage() {
                       className={`flex-1 py-2 rounded-lg text-xs font-medium border transition-colors ${
                         form.tenure === t
                           ? 'bg-cyan/10 border-cyan/30 text-cyan'
-                          : 'border-navy-border text-navy-300 hover:text-white'
+                          : 'border-navy-border text-navy-300 hover:text-charcoal'
                       }`}
                     >
                       {t.charAt(0).toUpperCase() + t.slice(1)}
@@ -340,7 +340,7 @@ export function AnalysePage() {
         <button
           onClick={handleAnalyse}
           disabled={!form.address || !form.postcode || !form.askingPrice}
-          className="w-full py-3.5 rounded-xl bg-cyan text-navy font-bold text-base hover:bg-cyan/90 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+          className="w-full py-3.5 rounded-xl bg-cyan text-white font-bold text-base hover:bg-cyan/90 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
         >
           {demoMode ? 'Run demo analysis' : 'Analyse this property'}
         </button>
@@ -363,7 +363,7 @@ function Label({ children }: { children: React.ReactNode }) {
 }
 
 const inputCls = (imported: boolean) =>
-  `w-full px-3 py-2 rounded-lg border text-sm text-white placeholder-navy-300 focus:outline-none focus:border-cyan/50 transition-colors ${
+  `w-full px-3 py-2 rounded-lg border text-sm text-charcoal placeholder-navy-300 focus:outline-none focus:border-cyan/50 transition-colors ${
     imported
       ? 'bg-pe-green/5 border-pe-green/30 text-pe-green'
       : 'bg-navy-light border-navy-border'
@@ -373,5 +373,5 @@ const selectCls = (imported: boolean) =>
   `w-full px-3 py-2 rounded-lg border text-sm focus:outline-none focus:border-cyan/50 transition-colors ${
     imported
       ? 'bg-pe-green/5 border-pe-green/30 text-pe-green'
-      : 'bg-navy-light border-navy-border text-white'
+      : 'bg-navy-light border-navy-border text-charcoal'
   }`;

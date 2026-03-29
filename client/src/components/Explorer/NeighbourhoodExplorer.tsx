@@ -46,15 +46,15 @@ export function NeighbourhoodExplorer({ result }: Props) {
       <div className="flex items-center justify-between px-4 py-2.5 bg-navy-light border-b border-navy-border">
         <div className="flex items-center gap-2">
           <Layers size={14} className="text-cyan" />
-          <span className="text-xs font-semibold text-white">Location Explorer</span>
+          <span className="text-xs font-semibold text-charcoal">Location Explorer</span>
         </div>
         <div className="flex items-center gap-1 rounded-lg border border-navy-border p-0.5">
           <button
             onClick={() => setMode('2d')}
             className={`flex items-center gap-1.5 px-3 py-1 rounded-md text-xs font-medium transition-colors ${
               mode === '2d'
-                ? 'bg-cyan text-navy font-semibold'
-                : 'text-navy-300 hover:text-white'
+                ? 'bg-cyan text-white font-semibold'
+                : 'text-navy-300 hover:text-charcoal'
             }`}
           >
             <Map size={12} />
@@ -64,8 +64,8 @@ export function NeighbourhoodExplorer({ result }: Props) {
             onClick={() => setMode('3d')}
             className={`flex items-center gap-1.5 px-3 py-1 rounded-md text-xs font-medium transition-colors ${
               mode === '3d'
-                ? 'bg-cyan text-navy font-semibold'
-                : 'text-navy-300 hover:text-white'
+                ? 'bg-cyan text-white font-semibold'
+                : 'text-navy-300 hover:text-charcoal'
             }`}
           >
             <Layers size={12} />
@@ -96,7 +96,7 @@ export function NeighbourhoodExplorer({ result }: Props) {
               href={osmLinkUrl}
               target="_blank"
               rel="noopener noreferrer"
-              className="absolute bottom-2 right-2 flex items-center gap-1 text-[10px] text-navy-300/70 hover:text-white bg-navy/80 rounded px-2 py-1 transition-colors"
+              className="absolute bottom-2 right-2 flex items-center gap-1 text-[10px] text-navy-300/70 hover:text-charcoal bg-navy/80 rounded px-2 py-1 transition-colors"
             >
               <ExternalLink size={10} />
               OpenStreetMap

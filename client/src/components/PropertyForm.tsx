@@ -65,10 +65,10 @@ function FormField({
 }
 
 const inputBase =
-  'w-full bg-navy-light border border-navy-border rounded-lg pl-9 pr-3 py-2.5 text-white text-sm placeholder-slate-600 focus:outline-none focus:border-cyan focus:ring-1 focus:ring-cyan/30 transition-all';
+  'w-full bg-navy-light border border-navy-border rounded-lg pl-9 pr-3 py-2.5 text-charcoal text-sm placeholder-slate-600 focus:outline-none focus:border-cyan focus:ring-1 focus:ring-cyan/30 transition-all';
 
 const selectBase =
-  'w-full bg-navy-light border border-navy-border rounded-lg pl-9 pr-3 py-2.5 text-white text-sm focus:outline-none focus:border-cyan focus:ring-1 focus:ring-cyan/30 transition-all appearance-none cursor-pointer';
+  'w-full bg-navy-light border border-navy-border rounded-lg pl-9 pr-3 py-2.5 text-charcoal text-sm focus:outline-none focus:border-cyan focus:ring-1 focus:ring-cyan/30 transition-all appearance-none cursor-pointer';
 
 export default function PropertyForm({ onSubmit, isLoading }: Props) {
   const [form, setForm] = useState<FormState>(DEFAULTS);
@@ -157,7 +157,7 @@ export default function PropertyForm({ onSubmit, isLoading }: Props) {
             </svg>
           </div>
           <div>
-            <h2 className="text-base font-semibold text-white">Property Details</h2>
+            <h2 className="text-base font-semibold text-charcoal">Property Details</h2>
             <p className="text-xs text-slate-500">Enter details manually or import from a listing URL</p>
           </div>
         </div>
@@ -353,7 +353,7 @@ export default function PropertyForm({ onSubmit, isLoading }: Props) {
             <span className="flex-1 h-px bg-slate-800 inline-block" />
           </p>
 
-          <div className="inline-flex rounded-lg border border-navy-border p-0.5 bg-navy/60 gap-0.5 mb-4">
+          <div className="inline-flex rounded-lg border border-navy-border p-0.5 bg-navy-light/80 gap-0.5 mb-4">
             {['leasehold', 'freehold'].map((t) => (
               <button
                 key={t}
@@ -415,7 +415,7 @@ export default function PropertyForm({ onSubmit, isLoading }: Props) {
         <button
           type="submit"
           disabled={isLoading}
-          className="relative w-full py-3.5 rounded-xl font-semibold text-sm text-navy bg-cyan hover:bg-cyan/90 disabled:opacity-40 disabled:cursor-not-allowed transition-all overflow-hidden group shadow-glow-cyan-sm hover:shadow-glow-cyan"
+          className="relative w-full py-3.5 rounded-xl font-semibold text-sm text-white bg-cyan hover:bg-cyan/90 disabled:opacity-40 disabled:cursor-not-allowed transition-all overflow-hidden group shadow-glow-cyan-sm hover:shadow-glow-cyan"
         >
           <span className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-700 skew-x-12" />
           <span className="relative flex items-center justify-center gap-2">

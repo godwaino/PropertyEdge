@@ -27,7 +27,7 @@ const STATUS_COLOR: Record<ShortlistStatus, string> = {
   active: 'text-cyan bg-cyan/10 border-cyan/30',
   watching: 'text-gold bg-gold/10 border-gold/30',
   viewing_booked: 'text-pe-green bg-pe-green/10 border-pe-green/30',
-  offer_pending: 'text-white bg-pe-green/20 border-pe-green/40',
+  offer_pending: 'text-charcoal bg-pe-green/20 border-pe-green/40',
   rejected: 'text-navy-300 bg-navy-light border-navy-border',
   archived: 'text-navy-300 bg-navy-light border-navy-border',
 };
@@ -42,7 +42,7 @@ function PropertyCard({ entry }: { entry: ShortlistEntry }) {
     <div className="glass-card rounded-2xl border border-navy-border p-5 hover:border-navy-300/30 transition-colors">
       <div className="flex items-start justify-between gap-3 mb-3">
         <div className="min-w-0">
-          <p className="text-white font-medium truncate">{entry.address}</p>
+          <p className="text-charcoal font-medium truncate">{entry.address}</p>
           <p className="text-xs text-navy-300 mt-0.5">
             {entry.postcode} · {entry.bedrooms}bd · {propertyTypeLabel(entry.propertyType)}
           </p>
@@ -53,7 +53,7 @@ function PropertyCard({ entry }: { entry: ShortlistEntry }) {
       </div>
 
       <div className="flex items-center gap-4 mb-3">
-        <p className="text-lg font-bold text-white tabular-nums">{formatCurrency(entry.askingPrice)}</p>
+        <p className="text-lg font-bold text-charcoal tabular-nums">{formatCurrency(entry.askingPrice)}</p>
         {entry.scoreSnapshot && (
           <VerdictBadge code={entry.scoreSnapshot.verdictCode} label={entry.scoreSnapshot.label} size="sm" />
         )}
@@ -68,7 +68,7 @@ function PropertyCard({ entry }: { entry: ShortlistEntry }) {
       <div className="flex items-center gap-2 flex-wrap">
         <Link
           to={`/report/${entry.analysisId}`}
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-navy-light border border-navy-border text-navy-300 hover:text-white text-xs font-medium transition-colors"
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-navy-light border border-navy-border text-navy-300 hover:text-charcoal text-xs font-medium transition-colors"
         >
           View report <ArrowRight size={12} />
         </Link>
@@ -77,7 +77,7 @@ function PropertyCard({ entry }: { entry: ShortlistEntry }) {
           onClick={() => addToCompare(entry.analysisId)}
           disabled={inCompare}
           className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-medium transition-colors ${
-            inCompare ? 'bg-cyan/10 border-cyan/30 text-cyan' : 'bg-navy-light border-navy-border text-navy-300 hover:text-white'
+            inCompare ? 'bg-cyan/10 border-cyan/30 text-cyan' : 'bg-navy-light border-navy-border text-navy-300 hover:text-charcoal'
           }`}
         >
           <BarChart2 size={12} />
@@ -134,7 +134,7 @@ function MyReports() {
         title="Sign in to see your reports"
         description="Reports are saved to your account when you're signed in. They're accessible from any device."
         action={
-          <Link to="/signin" className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-cyan text-navy font-semibold text-sm">
+          <Link to="/signin" className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-cyan text-white font-semibold text-sm">
             Sign in <ArrowRight size={14} />
           </Link>
         }
@@ -158,7 +158,7 @@ function MyReports() {
         title="No saved reports yet"
         description="Analyse a property while signed in and it will appear here."
         action={
-          <Link to="/analyse" className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-cyan text-navy font-semibold text-sm">
+          <Link to="/analyse" className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-cyan text-white font-semibold text-sm">
             Analyse a property <ArrowRight size={14} />
           </Link>
         }
@@ -174,7 +174,7 @@ function MyReports() {
           className="glass-card rounded-2xl border border-navy-border p-4 flex items-center gap-4 hover:border-navy-300/30 transition-colors"
         >
           <div className="min-w-0 flex-1">
-            <p className="text-white font-medium truncate">{r.property.address}</p>
+            <p className="text-charcoal font-medium truncate">{r.property.address}</p>
             <p className="text-xs text-navy-300 mt-0.5">
               {r.property.postcode} · {formatCurrency(r.property.askingPrice)}
             </p>
@@ -187,13 +187,13 @@ function MyReports() {
           <div className="flex-shrink-0 flex items-center gap-3">
             {r.result.scores?.overall && (
               <div className="text-right">
-                <p className="text-sm font-bold text-white tabular-nums">{r.result.scores.overall.score}</p>
+                <p className="text-sm font-bold text-charcoal tabular-nums">{r.result.scores.overall.score}</p>
                 <VerdictBadge code={r.result.scores.overall.verdictCode} label={r.result.scores.overall.label} size="sm" />
               </div>
             )}
             <Link
               to={`/report/${r.analysisId}`}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-navy-light border border-navy-border text-navy-300 hover:text-white text-xs font-medium transition-colors"
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-navy-light border border-navy-border text-navy-300 hover:text-charcoal text-xs font-medium transition-colors"
             >
               Open <ArrowRight size={12} />
             </Link>
@@ -232,8 +232,8 @@ function CompareView() {
   return (
     <div>
       <div className="flex items-center justify-between mb-6">
-        <h2 className="text-lg font-semibold text-white">Comparing {selected.length} properties</h2>
-        <button onClick={clearCompare} className="text-xs text-navy-300 hover:text-white">Clear</button>
+        <h2 className="text-lg font-semibold text-charcoal">Comparing {selected.length} properties</h2>
+        <button onClick={clearCompare} className="text-xs text-navy-300 hover:text-charcoal">Clear</button>
       </div>
       <div className="overflow-x-auto">
         <table className="w-full text-sm">
@@ -242,7 +242,7 @@ function CompareView() {
               <th className="text-left text-xs text-navy-300 font-medium pb-4 pr-6 w-32">Dimension</th>
               {selected.map(e => (
                 <th key={e.propertyId} className="text-center pb-4 px-3 min-w-[180px]">
-                  <div className="text-white font-medium truncate">{e.address}</div>
+                  <div className="text-charcoal font-medium truncate">{e.address}</div>
                   <div className="text-xs text-navy-300">{formatCurrency(e.askingPrice)}</div>
                   <button onClick={() => removeFromCompare(e.analysisId)} className="text-[11px] text-navy-300/60 hover:text-navy-300 mt-1">Remove</button>
                 </th>
@@ -265,7 +265,7 @@ function CompareView() {
                       <td key={e.propertyId} className={`py-3 px-3 text-center ${best ? 'bg-pe-green/5' : ''}`}>
                         {score !== null ? (
                           <>
-                            <p className={`text-base font-bold tabular-nums ${best ? 'text-pe-green' : 'text-white'}`}>{score}</p>
+                            <p className={`text-base font-bold tabular-nums ${best ? 'text-pe-green' : 'text-charcoal'}`}>{score}</p>
                             <p className="text-[11px] text-navy-300">{label}</p>
                             <div className="mt-1"><ScoreBar score={score} showNumber={false} size="sm" /></div>
                           </>
@@ -298,10 +298,10 @@ export function WorkspacePage() {
     <AppShell>
       <div className="max-w-5xl mx-auto">
         <div className="flex items-center justify-between mb-6">
-          <h1 className="text-2xl font-bold text-white">Workspace</h1>
+          <h1 className="text-2xl font-bold text-charcoal">Workspace</h1>
           <Link
             to="/analyse"
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-cyan text-navy text-sm font-semibold hover:bg-cyan/90 transition-colors"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-cyan text-white text-sm font-semibold hover:bg-cyan/90 transition-colors"
           >
             New analysis <ArrowRight size={14} />
           </Link>
@@ -320,7 +320,7 @@ export function WorkspacePage() {
               className={`flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium border-b-2 -mb-px transition-colors ${
                 tab === id
                   ? 'border-cyan text-cyan'
-                  : 'border-transparent text-navy-300 hover:text-white'
+                  : 'border-transparent text-navy-300 hover:text-charcoal'
               }`}
             >
               <Icon size={14} />
@@ -342,7 +342,7 @@ export function WorkspacePage() {
               title="Your shortlist is empty"
               description="Analyse a property and save it to start building your shortlist."
               action={
-                <Link to="/analyse" className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-cyan text-navy font-semibold text-sm">
+                <Link to="/analyse" className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-cyan text-white font-semibold text-sm">
                   Analyse a property <ArrowRight size={14} />
                 </Link>
               }

@@ -65,7 +65,7 @@ export function ReportPage() {
             action={
               <Link
                 to="/analyse"
-                className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-cyan text-navy font-semibold text-sm"
+                className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-cyan text-white font-semibold text-sm"
               >
                 <ArrowLeft size={14} /> New analysis
               </Link>
@@ -82,13 +82,13 @@ export function ReportPage() {
         <div className="flex items-center gap-3 mb-6">
           <Link
             to="/analyse"
-            className="flex items-center gap-1.5 text-sm text-navy-300 hover:text-white transition-colors"
+            className="flex items-center gap-1.5 text-sm text-navy-300 hover:text-charcoal transition-colors"
           >
             <ArrowLeft size={14} /> New analysis
           </Link>
           <Link
             to="/workspace"
-            className="flex items-center gap-1.5 text-sm text-navy-300 hover:text-white transition-colors"
+            className="flex items-center gap-1.5 text-sm text-navy-300 hover:text-charcoal transition-colors"
           >
             Workspace
           </Link>

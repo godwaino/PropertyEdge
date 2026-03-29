@@ -60,7 +60,7 @@ export function ReportShell({ result, property }: Props) {
       <div className="glass-card rounded-2xl border border-navy-border p-4 mb-4 flex flex-wrap items-center gap-4 justify-between">
         <div className="min-w-0">
           <p className="text-xs text-navy-300 mb-0.5">{property.postcode}</p>
-          <p className="text-white font-semibold truncate">{property.address}</p>
+          <p className="text-charcoal font-semibold truncate">{property.address}</p>
           <p className="text-sm text-navy-300 mt-0.5">
             {formatCurrency(property.askingPrice)} · {property.bedrooms}bd · {property.propertyType}
           </p>
@@ -75,7 +75,7 @@ export function ReportShell({ result, property }: Props) {
             className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-sm font-medium transition-colors ${
               saved
                 ? 'bg-cyan/10 border-cyan/30 text-cyan'
-                : 'border-navy-border text-navy-300 hover:text-white hover:border-navy-300'
+                : 'border-navy-border text-navy-300 hover:text-charcoal hover:border-navy-300'
             }`}
           >
             {saved ? <BookmarkCheck size={14} /> : <Bookmark size={14} />}
@@ -84,7 +84,7 @@ export function ReportShell({ result, property }: Props) {
           {saved && shortlist.length >= 2 && (
             <Link
               to="/workspace/compare"
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-navy-border text-navy-300 hover:text-white hover:border-navy-300 text-sm font-medium transition-colors"
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-navy-border text-navy-300 hover:text-charcoal hover:border-navy-300 text-sm font-medium transition-colors"
             >
               <BarChart2 size={14} />
               Compare
@@ -92,7 +92,7 @@ export function ReportShell({ result, property }: Props) {
           )}
           <button
             onClick={handlePrint}
-            className="print:hidden flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-navy-border text-navy-300 hover:text-white hover:border-navy-300 text-sm font-medium transition-colors"
+            className="print:hidden flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-navy-border text-navy-300 hover:text-charcoal hover:border-navy-300 text-sm font-medium transition-colors"
             title="Export as PDF"
           >
             <Printer size={14} />
@@ -111,7 +111,7 @@ export function ReportShell({ result, property }: Props) {
               className={`flex-shrink-0 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
                 activeTab === tab.id
                   ? 'bg-cyan/10 text-cyan border border-cyan/20'
-                  : 'text-navy-300 hover:text-white hover:bg-navy-light'
+                  : 'text-navy-300 hover:text-charcoal hover:bg-navy-light'
               }`}
             >
               {tab.label}

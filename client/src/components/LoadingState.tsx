@@ -67,7 +67,7 @@ export default function LoadingState() {
             </div>
           </div>
 
-          <h3 className="text-white font-semibold text-base">Analyzing Property</h3>
+          <h3 className="text-charcoal font-semibold text-base">Analyzing Property</h3>
           <p className="text-slate-500 text-sm mt-1">Running deep analysis on your property...</p>
         </div>
 
@@ -128,7 +128,7 @@ export default function LoadingState() {
                 </div>
                 <p
                   className={`text-sm transition-colors ${
-                    isActive ? 'text-white font-medium' : isDone ? 'text-slate-400' : 'text-slate-600'
+                    isActive ? 'text-charcoal font-medium' : isDone ? 'text-slate-400' : 'text-slate-600'
                   }`}
                 >
                   {step.label}

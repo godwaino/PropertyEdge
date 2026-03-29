@@ -19,7 +19,7 @@ export function ValuationRangeBar({ low, central, high, asking }: Props) {
     <div className="select-none">
       <div className="flex justify-between text-xs text-navy-300 mb-2">
         <span>{formatCurrency(low, true)}</span>
-        <span className="text-white font-medium">Fair value range</span>
+        <span className="text-charcoal font-medium">Fair value range</span>
         <span>{formatCurrency(high, true)}</span>
       </div>
 
@@ -60,11 +60,11 @@ export function ValuationRangeBar({ low, central, high, asking }: Props) {
       <div className="flex items-center gap-6 mt-3 text-xs">
         <div className="flex items-center gap-1.5">
           <div className="w-2 h-2 rounded-full bg-cyan" />
-          <span className="text-navy-300">Fair value: <span className="text-white">{formatCurrency(central)}</span></span>
+          <span className="text-navy-300">Fair value: <span className="text-charcoal">{formatCurrency(central)}</span></span>
         </div>
         <div className="flex items-center gap-1.5">
           <div className={`w-2 h-2 rounded-full ${asking <= central ? 'bg-pe-green' : 'bg-pe-red'}`} />
-          <span className="text-navy-300">Asking: <span className="text-white">{formatCurrency(asking)}</span></span>
+          <span className="text-navy-300">Asking: <span className="text-charcoal">{formatCurrency(asking)}</span></span>
         </div>
       </div>
     </div>

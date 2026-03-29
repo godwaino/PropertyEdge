@@ -20,7 +20,7 @@ function WeightSlider({ label, description, value, onChange }: WeightSliderProps
     <div className="py-4 border-b border-navy-border/50 last:border-0">
       <div className="flex items-start justify-between mb-1.5">
         <div>
-          <p className="text-sm font-medium text-white">{label}</p>
+          <p className="text-sm font-medium text-charcoal">{label}</p>
           <p className="text-xs text-navy-300">{description}</p>
         </div>
         <span className="text-sm font-semibold text-cyan ml-4 tabular-nums">{value}/10</span>
@@ -70,11 +70,11 @@ export function ProfilePage() {
       <div className="max-w-2xl mx-auto py-8 px-4 space-y-6">
         {/* Header */}
         <div className="flex items-center gap-3 mb-2">
-          <Link to="/workspace" className="text-navy-300 hover:text-white transition-colors">
+          <Link to="/workspace" className="text-navy-300 hover:text-charcoal transition-colors">
             <ChevronLeft size={20} />
           </Link>
           <div>
-            <h1 className="text-2xl font-bold text-white flex items-center gap-2">
+            <h1 className="text-2xl font-bold text-charcoal flex items-center gap-2">
               <UserCheck size={20} className="text-cyan" />
               Buyer Profile
             </h1>
@@ -105,7 +105,7 @@ export function ProfilePage() {
                     patch({ budgetMax: e.target.value ? Number(e.target.value) : null })
                   }
                   placeholder="e.g. 450000"
-                  className="flex-1 px-3 py-2.5 bg-navy-light border border-navy-border rounded-xl text-sm text-white placeholder-navy-300/50 focus:outline-none focus:border-cyan/60 transition-colors"
+                  className="flex-1 px-3 py-2.5 bg-navy-light border border-navy-border rounded-xl text-sm text-charcoal placeholder-navy-300/50 focus:outline-none focus:border-cyan/60 transition-colors"
                 />
                 {local.budgetMax && (
                   <span className="text-sm text-cyan w-16 text-right">
@@ -127,8 +127,8 @@ export function ProfilePage() {
                     onClick={() => patch({ minBedrooms: n })}
                     className={`w-10 h-10 rounded-xl border text-sm font-medium transition-colors ${
                       local.minBedrooms === n
-                        ? 'bg-cyan border-cyan text-navy'
-                        : 'border-navy-border text-navy-300 hover:text-white hover:border-cyan/40'
+                        ? 'bg-cyan border-cyan text-white'
+                        : 'border-navy-border text-navy-300 hover:text-charcoal hover:border-cyan/40'
                     }`}
                   >
                     {n}+
@@ -149,8 +149,8 @@ export function ProfilePage() {
                     onClick={() => patch({ preferredTenure: t })}
                     className={`px-4 py-2 rounded-xl border text-sm font-medium capitalize transition-colors ${
                       local.preferredTenure === t
-                        ? 'bg-cyan border-cyan text-navy'
-                        : 'border-navy-border text-navy-300 hover:text-white hover:border-cyan/40'
+                        ? 'bg-cyan border-cyan text-white'
+                        : 'border-navy-border text-navy-300 hover:text-charcoal hover:border-cyan/40'
                     }`}
                   >
                     {t === 'any' ? 'No preference' : t}
@@ -218,7 +218,7 @@ export function ProfilePage() {
         <div className="flex items-center justify-between">
           <button
             onClick={handleReset}
-            className="flex items-center gap-2 px-4 py-2 rounded-xl border border-navy-border text-sm text-navy-300 hover:text-white transition-colors"
+            className="flex items-center gap-2 px-4 py-2 rounded-xl border border-navy-border text-sm text-navy-300 hover:text-charcoal transition-colors"
           >
             <RotateCcw size={14} />
             Reset defaults
@@ -228,7 +228,7 @@ export function ProfilePage() {
             className={`flex items-center gap-2 px-6 py-2.5 rounded-xl text-sm font-semibold transition-all ${
               saved
                 ? 'bg-emerald-500/20 border border-emerald-500/40 text-emerald-400'
-                : 'bg-cyan text-navy hover:bg-cyan/90'
+                : 'bg-cyan text-white hover:bg-cyan/90'
             }`}
           >
             <Save size={14} />
