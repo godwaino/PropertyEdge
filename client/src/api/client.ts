@@ -1,6 +1,9 @@
 import { useUiStore } from '../stores/uiStore';
 
-const BASE = '/api';
+// In dev: VITE_API_URL is unset → falls back to '/api' (Vite proxy handles it)
+// In prod on same domain (Firebase Hosting rewrite): also '/api'
+// In prod on separate domain: set VITE_API_URL=https://api.yourapp.com
+const BASE = (import.meta.env.VITE_API_URL ?? '') + '/api';
 
 export class ApiError extends Error {
   constructor(
