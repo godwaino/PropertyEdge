@@ -18,7 +18,6 @@ export default defineConfig({
       output: {
         // Split Cesium into its own chunk to avoid blocking initial load
         manualChunks: {
-          cesium: ['cesium'],
           three: ['three'],
           firebase: ['firebase/app', 'firebase/auth', 'firebase/firestore'],
         },

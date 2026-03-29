@@ -3,7 +3,7 @@ import cors from 'cors';
 import path from 'path';
 import fs from 'fs';
 import { fileURLToPath } from 'url';
-import Anthropic from '@anthropic-ai/sdk';
+import { GoogleGenerativeAI } from '@google/generative-ai';
 import dotenv from 'dotenv';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -28,7 +28,7 @@ for (const envPath of envPaths) {
       console.log('dotenv parsed keys:', Object.keys(result.parsed || {}));
     }
     // Fallback: manually parse and set env vars if dotenv fails
-    if (!process.env.ANTHROPIC_API_KEY) {
+    if (!process.env.GEMINI_API_KEY) {
       const envContent = fs.readFileSync(envPath, 'utf-8');
       for (const line of envContent.split('\n')) {
         const match = line.match(/^([^#=]+)=(.*)$/);
@@ -798,13 +798,14 @@ if (fs.existsSync(clientDist)) {
   console.log(`Warning: No client build found at ${clientDist}. Run "npm run build" first.`);
 }
 
-// Only create Anthropic client if key exists
-let anthropic: Anthropic | null = null;
-if (process.env.ANTHROPIC_API_KEY) {
-  anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
-  console.log('Anthropic API key loaded.');
+// Only create Gemini client if key exists
+let gemini: ReturnType<GoogleGenerativeAI['getGenerativeModel']> | null = null;
+if (process.env.GEMINI_API_KEY) {
+  const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+  gemini = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
+  console.log('Gemini API key loaded.');
 } else {
-  console.log('No ANTHROPIC_API_KEY found. Live analysis disabled — demo mode still works.');
+  console.log('No GEMINI_API_KEY found. Live analysis disabled — demo mode still works.');
 }
 
 interface PropertyRequest {
@@ -823,10 +824,10 @@ interface PropertyRequest {
 
 // Live analysis endpoint (requires API key)
 app.post('/api/analyze', rateLimit, async (req, res) => {
-  if (!anthropic) {
+  if (!gemini) {
     res.status(500).json({
       error: 'No API key configured',
-      message: 'Add ANTHROPIC_API_KEY to your .env file, then restart the server.',
+      message: 'Add GEMINI_API_KEY to your .env file, then restart the server.',
       hint: 'Use Demo Mode to preview the app without an API key.',
     });
     return;
@@ -871,16 +872,10 @@ app.post('/api/analyze', rateLimit, async (req, res) => {
 
     const prompt = buildPrompt(property, comparables, postcodeInfo, epcData, crimeStats, floodRisk, unemployment);
 
-    const message = await anthropic.messages.create({
-      model: 'claude-sonnet-4-20250514',
-      max_tokens: 2048,
-      messages: [{ role: 'user', content: prompt }],
-    });
+    const result = await gemini!.generateContent(prompt);
+    const responseText = result.response.text();
 
-    const content = message.content[0];
-    if (content.type !== 'text') throw new Error('Unexpected response type');
-
-    const jsonMatch = content.text.match(/\{[\s\S]*\}/);
+    const jsonMatch = responseText.match(/\{[\s\S]*\}/);
     if (!jsonMatch) throw new Error('Could not parse JSON from response');
 
     const analysis = JSON.parse(jsonMatch[0]);
@@ -915,23 +910,23 @@ app.post('/api/analyze', rateLimit, async (req, res) => {
 
     if (error?.status === 401) {
       status = 401;
-      message = 'Invalid API key. Check your ANTHROPIC_API_KEY in the .env file.';
+      message = 'Invalid API key. Check your GEMINI_API_KEY in the .env file.';
     } else if (error?.status === 403) {
       status = 403;
-      message = 'API key does not have permission. Check your Anthropic account billing.';
+      message = 'API key does not have permission. Check your Google AI Studio account.';
     } else if (error?.status === 429) {
       status = 429;
       message = 'Rate limited — please wait a moment and try again.';
     } else if (error?.status === 529 || error?.status === 503) {
       status = 503;
-      message = 'Anthropic API is temporarily overloaded. Try again in a minute.';
+      message = 'Gemini API is temporarily overloaded. Try again in a minute.';
     } else if (
       error?.code === 'ENOTFOUND' ||
       error?.code === 'ECONNREFUSED' ||
       error?.code === 'ETIMEDOUT'
     ) {
       status = 503;
-      message = 'Cannot reach Anthropic API. Check your internet connection.';
+      message = 'Cannot reach Gemini API. Check your internet connection.';
     } else if (error?.message) {
       message = error.message;
     }
@@ -1302,7 +1297,7 @@ app.post('/api/parse-listing', async (req, res) => {
 app.get('/api/health', (_req, res) => {
   res.json({
     status: 'ok',
-    apiKeyConfigured: !!process.env.ANTHROPIC_API_KEY,
+    apiKeyConfigured: !!process.env.GEMINI_API_KEY,
     timestamp: new Date().toISOString(),
   });
 });
@@ -1319,7 +1314,14 @@ app.get('*', (_req, res) => {
   }
 });
 
-app.listen(Number(PORT), '0.0.0.0', () => {
-  console.log(`\nProperty Edge v2 running at http://localhost:${PORT}`);
-  console.log(`API key: ${process.env.ANTHROPIC_API_KEY ? 'configured' : 'NOT configured (demo mode only)'}\n`);
-});
+// Export for Vercel serverless / testing
+export default app;
+
+// Only bind to a port when running directly (not when imported by Vercel)
+const isMain = process.argv[1] === fileURLToPath(import.meta.url);
+if (isMain) {
+  app.listen(Number(PORT), '0.0.0.0', () => {
+    console.log(`\nProperty Edge v2 running at http://localhost:${PORT}`);
+    console.log(`API key: ${process.env.GEMINI_API_KEY ? 'configured' : 'NOT configured (demo mode only)'}\n`);
+  });
+}
