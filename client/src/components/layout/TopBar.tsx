@@ -1,5 +1,15 @@
 import { Link, useLocation } from 'react-router-dom';
-import { Home, LayoutGrid, GitCompare, Menu, X, Layers, UserCircle, LogIn } from 'lucide-react';
+import { Home, LayoutGrid, GitCompare, Menu, X, UserCircle, LogIn } from 'lucide-react';
+
+function PeLogo({ size = 24 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <rect width="32" height="32" rx="6" fill="#0a1929" />
+      <path d="M16 6L4 16h4v10h16V16h4L16 6z" fill="#00D9FF" />
+      <circle cx="16" cy="19" r="3" fill="#0a1929" />
+    </svg>
+  );
+}
 import { useUiStore } from '../../stores/uiStore';
 import { useWorkspaceStore } from '../../stores/workspaceStore';
 import { useAuthStore } from '../../stores/authStore';
@@ -22,10 +32,8 @@ export function TopBar() {
 
         {/* Logo */}
         <Link to="/" className="flex items-center gap-2 mr-2 flex-shrink-0">
-          <div className="w-7 h-7 rounded-lg bg-cyan/10 border border-cyan/30 flex items-center justify-center">
-            <Layers size={14} className="text-cyan" />
-          </div>
-          <span className="font-semibold text-charcoal text-sm hidden sm:block">
+          <PeLogo size={26} />
+          <span className="font-bold text-charcoal text-sm hidden sm:block tracking-tight">
             Property<span className="text-cyan">Edge</span>
           </span>
         </Link>
