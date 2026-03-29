@@ -1,0 +1,11 @@
+# Exclude old Python app files — Vercel was deploying these as Python serverless functions
+app.py
+propertyedge_core.py
+ppd_sqlite.py
+storage.py
+requirements.txt
+templates/
+static/
+data/
+railway.toml
+Dockerfile
