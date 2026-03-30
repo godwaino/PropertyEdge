@@ -83,9 +83,17 @@ export const useWorkspaceStore = create<WorkspaceState>()(
       clearShortlist: () => set({ shortlist: [] }),
 
       setOwner: (uid) => {
-        if (get()._uid !== uid) {
-          // Different user — wipe shortlist so they start fresh
+        const storedUid = get()._uid;
+        if (uid === null) {
+          // Sign-out — preserve data so the same user gets it back on re-login
+          return;
+        }
+        if (storedUid !== null && storedUid !== uid) {
+          // A different user is signing in — clear their data
           set({ _uid: uid, shortlist: [], compareIds: [] });
+        } else {
+          // Same user signing back in (or first sign-in) — restore their data
+          set({ _uid: uid });
         }
       },
 
