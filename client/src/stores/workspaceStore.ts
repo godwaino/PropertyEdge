@@ -4,14 +4,18 @@ import type { ShortlistEntry, ShortlistStatus, FullAnalysisResult } from '../typ
 import type { PropertyInput } from '../types/property';
 
 interface WorkspaceState {
+  _uid: string | null;        // owner of the persisted data
   shortlist: ShortlistEntry[];
-  compareIds: string[]; // analysisIds selected for comparison
+  compareIds: string[];
 
   addToShortlist: (property: PropertyInput, analysis: FullAnalysisResult) => void;
   removeFromShortlist: (propertyId: string) => void;
   updateStatus: (propertyId: string, status: ShortlistStatus) => void;
   isShortlisted: (propertyId: string) => boolean;
   clearShortlist: () => void;
+
+  /** Called by authStore on every auth-state change. Clears data if the uid changes. */
+  setOwner: (uid: string | null) => void;
 
   addToCompare: (analysisId: string) => void;
   removeFromCompare: (analysisId: string) => void;
@@ -30,6 +34,7 @@ function makePropertyId(property: PropertyInput): string {
 export const useWorkspaceStore = create<WorkspaceState>()(
   persist(
     (set, get) => ({
+      _uid: null,
       shortlist: [],
       compareIds: [],
 
@@ -77,6 +82,13 @@ export const useWorkspaceStore = create<WorkspaceState>()(
 
       clearShortlist: () => set({ shortlist: [] }),
 
+      setOwner: (uid) => {
+        if (get()._uid !== uid) {
+          // Different user — wipe shortlist so they start fresh
+          set({ _uid: uid, shortlist: [], compareIds: [] });
+        }
+      },
+
       addToCompare: (analysisId) => {
         const ids = get().compareIds;
         if (ids.includes(analysisId) || ids.length >= 4) return;
@@ -92,8 +104,7 @@ export const useWorkspaceStore = create<WorkspaceState>()(
     }),
     {
       name: 'pe-workspace',
-      // Only persist shortlist (not compare — that's session state)
-      partialize: (s) => ({ shortlist: s.shortlist }),
+      partialize: (s) => ({ _uid: s._uid, shortlist: s.shortlist }),
     },
   ),
 );
