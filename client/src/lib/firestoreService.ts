@@ -10,7 +10,7 @@ import {
   limit,
 } from 'firebase/firestore';
 import { db } from './firebase';
-import type { FullAnalysisResult } from '../types/analysis';
+import type { FullAnalysisResult, ShortlistEntry, ShortlistStatus } from '../types/analysis';
 import type { PropertyInput } from '../types/property';
 
 export interface SavedReport {
@@ -68,4 +68,40 @@ export async function listReports(uid: string): Promise<SavedReport[]> {
 export async function deleteReport(uid: string, analysisId: string): Promise<void> {
   if (!db) return;
   await deleteDoc(doc(reportsCol(uid), analysisId));
+}
+
+// ── Shortlist ────────────────────────────────────────────────────────────────
+
+function shortlistCol(uid: string) {
+  return collection(db!, 'users', uid, 'shortlist');
+}
+
+export async function loadShortlist(uid: string): Promise<ShortlistEntry[]> {
+  if (!db) return [];
+  try {
+    const q = query(shortlistCol(uid), orderBy('addedAt', 'desc'));
+    const snap = await getDocs(q);
+    return snap.docs.map((d) => d.data() as ShortlistEntry);
+  } catch {
+    return [];
+  }
+}
+
+export async function saveShortlistEntry(uid: string, entry: ShortlistEntry): Promise<void> {
+  if (!db) return;
+  await setDoc(doc(shortlistCol(uid), entry.propertyId), entry);
+}
+
+export async function deleteShortlistEntry(uid: string, propertyId: string): Promise<void> {
+  if (!db) return;
+  await deleteDoc(doc(shortlistCol(uid), propertyId));
+}
+
+export async function updateShortlistStatus(
+  uid: string,
+  propertyId: string,
+  status: ShortlistStatus,
+): Promise<void> {
+  if (!db) return;
+  await setDoc(doc(shortlistCol(uid), propertyId), { status }, { merge: true });
 }
