@@ -10,6 +10,7 @@ import {
   type User,
 } from 'firebase/auth';
 import { auth, isConfigured } from '../lib/firebase';
+import { useWorkspaceStore } from './workspaceStore';
 
 interface AuthState {
   user: User | null;
@@ -41,6 +42,7 @@ export const useAuthStore = create<AuthState>()(
         }
         const unsub = onAuthStateChanged(auth, (user) => {
           set({ user, loading: false });
+          useWorkspaceStore.getState().setOwner(user?.uid ?? null);
         });
         return unsub;
       },

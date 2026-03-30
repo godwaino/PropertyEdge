@@ -2,16 +2,26 @@ import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import type { ShortlistEntry, ShortlistStatus, FullAnalysisResult } from '../types/analysis';
 import type { PropertyInput } from '../types/property';
+import {
+  loadShortlist,
+  saveShortlistEntry,
+  deleteShortlistEntry,
+  updateShortlistStatus,
+} from '../lib/firestoreService';
 
 interface WorkspaceState {
+  _uid: string | null;        // owner of the persisted data
   shortlist: ShortlistEntry[];
-  compareIds: string[]; // analysisIds selected for comparison
+  compareIds: string[];
 
   addToShortlist: (property: PropertyInput, analysis: FullAnalysisResult) => void;
   removeFromShortlist: (propertyId: string) => void;
   updateStatus: (propertyId: string, status: ShortlistStatus) => void;
   isShortlisted: (propertyId: string) => boolean;
   clearShortlist: () => void;
+
+  /** Called by authStore on every auth-state change. Clears data if the uid changes. */
+  setOwner: (uid: string | null) => void;
 
   addToCompare: (analysisId: string) => void;
   removeFromCompare: (analysisId: string) => void;
@@ -30,6 +40,7 @@ function makePropertyId(property: PropertyInput): string {
 export const useWorkspaceStore = create<WorkspaceState>()(
   persist(
     (set, get) => ({
+      _uid: null,
       shortlist: [],
       compareIds: [],
 
@@ -60,22 +71,49 @@ export const useWorkspaceStore = create<WorkspaceState>()(
         };
 
         set((s) => ({ shortlist: [entry, ...s.shortlist] }));
+        const uid = get()._uid;
+        if (uid) saveShortlistEntry(uid, entry);
       },
 
-      removeFromShortlist: (propertyId) =>
-        set((s) => ({ shortlist: s.shortlist.filter(e => e.propertyId !== propertyId) })),
+      removeFromShortlist: (propertyId) => {
+        set((s) => ({ shortlist: s.shortlist.filter(e => e.propertyId !== propertyId) }));
+        const uid = get()._uid;
+        if (uid) deleteShortlistEntry(uid, propertyId);
+      },
 
-      updateStatus: (propertyId, status) =>
+      updateStatus: (propertyId, status) => {
         set((s) => ({
           shortlist: s.shortlist.map(e =>
             e.propertyId === propertyId ? { ...e, status } : e,
           ),
-        })),
+        }));
+        const uid = get()._uid;
+        if (uid) updateShortlistStatus(uid, propertyId, status);
+      },
 
       isShortlisted: (propertyId) =>
         get().shortlist.some(e => e.propertyId === propertyId),
 
       clearShortlist: () => set({ shortlist: [] }),
+
+      setOwner: (uid) => {
+        if (uid === null) {
+          // Sign-out — keep local cache in place but clear uid
+          set({ _uid: null });
+          return;
+        }
+        const storedUid = get()._uid;
+        if (storedUid !== uid) {
+          // Different (or new) user — clear local cache immediately, then load from Firestore
+          set({ _uid: uid, shortlist: [], compareIds: [] });
+        } else {
+          set({ _uid: uid });
+        }
+        // Always load the authoritative list from Firestore on sign-in
+        loadShortlist(uid).then((entries) => {
+          if (entries.length > 0) set({ shortlist: entries });
+        });
+      },
 
       addToCompare: (analysisId) => {
         const ids = get().compareIds;
@@ -92,8 +130,7 @@ export const useWorkspaceStore = create<WorkspaceState>()(
     }),
     {
       name: 'pe-workspace',
-      // Only persist shortlist (not compare — that's session state)
-      partialize: (s) => ({ shortlist: s.shortlist }),
+      partialize: (s) => ({ _uid: s._uid, shortlist: s.shortlist }),
     },
   ),
 );
