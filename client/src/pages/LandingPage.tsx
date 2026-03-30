@@ -303,7 +303,7 @@ export function LandingPage() {
           <div className="flex items-center gap-2.5">
             <PeLogo size={20} />
             <span className="font-semibold text-charcoal">PropertyEdge</span>
-            <span>© 2025</span>
+            <span>© 2026</span>
           </div>
           <div className="flex items-center gap-4 text-center sm:text-right">
             <Link to="/privacy" className="hover:text-charcoal transition-colors">Privacy Policy</Link>

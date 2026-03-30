@@ -1,5 +1,5 @@
 import { Link, useLocation } from 'react-router-dom';
-import { Home, LayoutGrid, GitCompare, Menu, X, UserCircle, LogIn } from 'lucide-react';
+import { Home, LayoutGrid, Menu, X, UserCircle, LogIn } from 'lucide-react';
 
 function PeLogo({ size = 24 }: { size?: number }) {
   return (
@@ -17,7 +17,6 @@ import { useAuthStore } from '../../stores/authStore';
 const NAV = [
   { to: '/analyse',   label: 'Analyse',   icon: Home },
   { to: '/workspace', label: 'Workspace', icon: LayoutGrid },
-  { to: '/workspace/compare', label: 'Compare', icon: GitCompare },
 ];
 
 export function TopBar() {
@@ -101,13 +100,6 @@ export function TopBar() {
               Sign in
             </Link>
           )}
-
-          <Link
-            to="/analyse"
-            className="hidden sm:flex items-center px-3 py-1.5 rounded-lg bg-charcoal text-white font-semibold text-sm hover:bg-charcoal-800 transition-colors"
-          >
-            Analyse
-          </Link>
 
           {/* Mobile menu */}
           <button

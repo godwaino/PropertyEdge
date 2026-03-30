@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Link, useLocation } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import { AppShell } from '../components/layout/AppShell';
 import { EmptyState } from '../components/ui/EmptyState';
 import { VerdictBadge } from '../components/ui/VerdictBadge';
@@ -288,9 +288,8 @@ function CompareView() {
 type TabId = 'shortlist' | 'reports' | 'compare';
 
 export function WorkspacePage() {
-  const location = useLocation();
-  const isCompare = location.pathname.includes('compare');
-  const [tab, setTab] = useState<TabId>(isCompare ? 'compare' : 'shortlist');
+  const [tab, setTab] = useState<TabId>('shortlist');
+
   const { shortlist } = useWorkspaceStore();
   const { user } = useAuthStore();
 
@@ -311,8 +310,8 @@ export function WorkspacePage() {
         <div className="flex items-center gap-1 mb-6 border-b border-navy-border pb-0">
           {([
             { id: 'shortlist', label: 'Shortlist', icon: LayoutGrid, badge: shortlist.length },
-            { id: 'reports',   label: 'My Reports', icon: FileText, badge: 0 },
-            { id: 'compare',   label: 'Compare',    icon: GitCompare, badge: 0 },
+            { id: 'reports',   label: 'My Reports', icon: FileText,    badge: 0 },
+            { id: 'compare',   label: 'Compare',    icon: GitCompare,  badge: 0 },
           ] as const).map(({ id, label, icon: Icon, badge }) => (
             <button
               key={id}

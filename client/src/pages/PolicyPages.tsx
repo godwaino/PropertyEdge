@@ -47,7 +47,7 @@ function PolicyShell({ title, lastUpdated, children }: { title: string; lastUpda
           <div className="flex items-center gap-2.5">
             <PeLogo />
             <span className="font-semibold text-charcoal">PropertyEdge</span>
-            <span>© 2025</span>
+            <span>© 2026</span>
           </div>
           <div className="flex items-center gap-4">
             <Link to="/privacy" className="hover:text-charcoal transition-colors">Privacy Policy</Link>
@@ -86,7 +86,7 @@ function Ul({ items }: { items: string[] }) {
 
 export function PrivacyPage() {
   return (
-    <PolicyShell title="Privacy Policy" lastUpdated="29 March 2025">
+    <PolicyShell title="Privacy Policy" lastUpdated="30 March 2026">
 
       <P>
         PropertyEdge ("we", "our", or "us") is committed to protecting your privacy. This policy explains what information we collect, how we use it, and what rights you have over it.
@@ -175,7 +175,7 @@ export function PrivacyPage() {
 
 export function TermsPage() {
   return (
-    <PolicyShell title="Terms of Service" lastUpdated="29 March 2025">
+    <PolicyShell title="Terms of Service" lastUpdated="30 March 2026">
 
       <P>
         These Terms of Service ("Terms") govern your use of PropertyEdge, operated by PropertyEdge ("we", "us", or "our"). By accessing or using the service you agree to these Terms. If you do not agree, please do not use the service.
