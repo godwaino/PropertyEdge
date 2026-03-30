@@ -101,13 +101,6 @@ export function TopBar() {
             </Link>
           )}
 
-          <Link
-            to="/analyse"
-            className="hidden sm:flex items-center px-3 py-1.5 rounded-lg bg-charcoal text-white font-semibold text-sm hover:bg-charcoal-800 transition-colors"
-          >
-            Analyse
-          </Link>
-
           {/* Mobile menu */}
           <button
             onClick={toggleSidebar}
