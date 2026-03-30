@@ -10,7 +10,7 @@ import { listReports, deleteReport, type SavedReport } from '../lib/firestoreSer
 import type { ShortlistStatus, ShortlistEntry } from '../types/analysis';
 import { formatCurrency, formatRelativeTime, propertyTypeLabel } from '../utils/formatters';
 import {
-  LayoutGrid, Trash2, Home, ArrowRight,
+  LayoutGrid, Trash2, GitCompare, Home, ArrowRight, BarChart2,
   FileText, LogIn, Loader2, Clock,
 } from 'lucide-react';
 
@@ -35,7 +35,8 @@ const STATUS_COLOR: Record<ShortlistStatus, string> = {
 // ─── Shortlist card ───────────────────────────────────────────────────────────
 
 function PropertyCard({ entry }: { entry: ShortlistEntry }) {
-  const { updateStatus, removeFromShortlist } = useWorkspaceStore();
+  const { updateStatus, removeFromShortlist, addToCompare, isInCompare } = useWorkspaceStore();
+  const inCompare = isInCompare(entry.analysisId);
 
   return (
     <div className="glass-card rounded-2xl border border-navy-border p-5 hover:border-navy-300/30 transition-colors">
@@ -72,7 +73,18 @@ function PropertyCard({ entry }: { entry: ShortlistEntry }) {
           View report <ArrowRight size={12} />
         </Link>
 
-<div className="ml-auto flex items-center gap-1">
+        <button
+          onClick={() => addToCompare(entry.analysisId)}
+          disabled={inCompare}
+          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-medium transition-colors ${
+            inCompare ? 'bg-cyan/10 border-cyan/30 text-cyan' : 'bg-navy-light border-navy-border text-navy-300 hover:text-charcoal'
+          }`}
+        >
+          <BarChart2 size={12} />
+          {inCompare ? 'In compare' : 'Compare'}
+        </button>
+
+        <div className="ml-auto flex items-center gap-1">
           <select
             value={entry.status}
             onChange={e => updateStatus(entry.propertyId, e.target.value as ShortlistStatus)}
@@ -198,12 +210,86 @@ function MyReports() {
   );
 }
 
+// ─── Compare view ─────────────────────────────────────────────────────────────
+
+function CompareView() {
+  const { shortlist, compareIds, removeFromCompare, clearCompare } = useWorkspaceStore();
+  const selected = shortlist.filter(e => compareIds.includes(e.analysisId));
+
+  if (selected.length < 2) {
+    return (
+      <EmptyState
+        icon={<GitCompare size={28} />}
+        title="Select properties to compare"
+        description="Add at least 2 properties from your shortlist to start comparing."
+        action={<Link to="/workspace" className="text-sm text-cyan hover:underline">Go to shortlist</Link>}
+      />
+    );
+  }
+
+  const DIMS = ['Valuation', 'Neighbourhood', 'Risk', 'Overall'] as const;
+
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-6">
+        <h2 className="text-lg font-semibold text-charcoal">Comparing {selected.length} properties</h2>
+        <button onClick={clearCompare} className="text-xs text-charcoal-600 hover:text-charcoal font-medium">Clear</button>
+      </div>
+      <div className="overflow-x-auto">
+        <table className="w-full text-sm">
+          <thead>
+            <tr>
+              <th className="text-left text-xs text-charcoal-600 font-semibold pb-4 pr-6 w-32">Dimension</th>
+              {selected.map(e => (
+                <th key={e.propertyId} className="text-center pb-4 px-3 min-w-[180px]">
+                  <div className="text-charcoal font-medium truncate">{e.address}</div>
+                  <div className="text-xs text-navy-300">{formatCurrency(e.askingPrice)}</div>
+                  <button onClick={() => removeFromCompare(e.analysisId)} className="text-[11px] text-charcoal-600 hover:text-charcoal mt-1 font-medium">Remove</button>
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {DIMS.map(dim => {
+              const key = dim.toLowerCase() as 'valuation' | 'neighbourhood' | 'risk' | 'overall';
+              return (
+                <tr key={dim} className="border-t border-navy-border">
+                  <td className="py-3 pr-6 text-xs font-medium text-navy-300">{dim}</td>
+                  {selected.map(e => {
+                    const score = e.analysis?.scores?.[key]?.score ?? null;
+                    const label = e.analysis?.scores?.[key]?.label ?? '—';
+                    const best = score !== null
+                      ? Math.max(...selected.map(s => s.analysis?.scores?.[key]?.score ?? 0)) === score
+                      : false;
+                    return (
+                      <td key={e.propertyId} className={`py-3 px-3 text-center ${best ? 'bg-pe-green/5' : ''}`}>
+                        {score !== null ? (
+                          <>
+                            <p className={`text-base font-bold tabular-nums ${best ? 'text-pe-green' : 'text-charcoal'}`}>{score}</p>
+                            <p className="text-[11px] text-navy-300">{label}</p>
+                            <div className="mt-1"><ScoreBar score={score} showNumber={false} size="sm" /></div>
+                          </>
+                        ) : <span className="text-navy-300">—</span>}
+                      </td>
+                    );
+                  })}
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
-type TabId = 'shortlist' | 'reports';
+type TabId = 'shortlist' | 'reports' | 'compare';
 
 export function WorkspacePage() {
   const [tab, setTab] = useState<TabId>('shortlist');
+
   const { shortlist } = useWorkspaceStore();
   const { user } = useAuthStore();
 
@@ -224,7 +310,8 @@ export function WorkspacePage() {
         <div className="flex items-center gap-1 mb-6 border-b border-navy-border pb-0">
           {([
             { id: 'shortlist', label: 'Shortlist', icon: LayoutGrid, badge: shortlist.length },
-            { id: 'reports',   label: 'My Reports', icon: FileText, badge: 0 },
+            { id: 'reports',   label: 'My Reports', icon: FileText,    badge: 0 },
+            { id: 'compare',   label: 'Compare',    icon: GitCompare,  badge: 0 },
           ] as const).map(({ id, label, icon: Icon, badge }) => (
             <button
               key={id}
@@ -267,6 +354,12 @@ export function WorkspacePage() {
         )}
 
         {tab === 'reports' && <MyReports />}
+
+        {tab === 'compare' && (
+          <div className="glass-card rounded-2xl border border-navy-border p-6">
+            <CompareView />
+          </div>
+        )}
       </div>
     </AppShell>
   );
