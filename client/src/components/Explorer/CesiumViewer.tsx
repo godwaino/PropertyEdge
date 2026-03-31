@@ -54,6 +54,7 @@ export function CesiumViewer({
   // Track entities added per layer so we can remove them when toggled off
   const poiEntitiesRef = useRef<Map<LayerId, string[]>>(new Map());
   const fetchingRef = useRef<Set<LayerId>>(new Set());
+  const buildingsTilesetRef = useRef<{ show: boolean } | null>(null);
 
   const removeLayerEntities = useCallback((layerId: LayerId) => {
     const viewer = viewerRef.current;
@@ -214,6 +215,11 @@ export function CesiumViewer({
     } else if (!layerState('greenspace') && hasEntities('greenspace')) {
       removeLayerEntities('greenspace');
     }
+
+    // ── 3D buildings ────────────────────────────────────────────────────────
+    if (buildingsTilesetRef.current) {
+      buildingsTilesetRef.current.show = layerState('buildings3d');
+    }
   }, [layers, cesiumReady, property.lat, property.lng, crimeScore, removeLayerEntities]);
 
   // Project geo coordinates to screen space (used by Three.js overlay)
@@ -300,6 +306,21 @@ export function CesiumViewer({
         viewer.scene.backgroundColor = Cesium.Color.fromCssColorString('#080e1a');
         viewer.scene.fog.enabled = true;
         viewer.scene.fog.density = 0.0002;
+        viewer.scene.globe.depthTestAgainstTerrain = true;
+        viewer.scene.globe.enableLighting = true;
+        viewer.shadows = true;
+        viewer.scene.shadowMap.enabled = true;
+
+        // Add global OSM 3D buildings for spatial context
+        // Works without an ion token and gives immediate neighborhood massing context.
+        try {
+          const buildingsTileset = await Cesium.createOsmBuildingsAsync();
+          buildingsTileset.show = true;
+          viewer.scene.primitives.add(buildingsTileset);
+          buildingsTilesetRef.current = buildingsTileset;
+        } catch (tilesErr) {
+          console.warn('OSM 3D buildings unavailable:', tilesErr);
+        }
 
         // Add property marker
         viewer.entities.add({
@@ -385,6 +406,7 @@ export function CesiumViewer({
         try { viewerRef.current.destroy(); } catch { /* ignore */ }
         viewerRef.current = null;
       }
+      buildingsTilesetRef.current = null;
     };
   }, [property.lat, property.lng, property.label, property.askingPrice, floodHighRisk, floodMediumRisk]);
 
