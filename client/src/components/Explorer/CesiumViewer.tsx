@@ -279,6 +279,13 @@ export function CesiumViewer({
           viewerOptions.terrain = Cesium.Terrain.fromWorldTerrain({ requestWaterMask: true });
         }
 
+        // Use OpenStreetMap tiles — works without an Ion token and is sharp at all zoom levels
+        viewerOptions.imageryProvider = new Cesium.UrlTemplateImageryProvider({
+          url: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+          maximumLevel: 19,
+          credit: new Cesium.Credit('© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'),
+        });
+
         // Disable skybox in options to avoid empty-source WebGL errors
         viewerOptions.skyBox = false as unknown as undefined;
 
@@ -525,23 +532,25 @@ export function CesiumViewer({
 
 // Create a pin marker canvas for the Cesium billboard
 function createPinCanvas(color: string, label: string, bgColor: string): HTMLCanvasElement {
+  const dpr = window.devicePixelRatio || 1;
+  const W = 40, H = 52;
   const canvas = document.createElement('canvas');
-  canvas.width = 40;
-  canvas.height = 52;
+  canvas.width = W * dpr;
+  canvas.height = H * dpr;
+  canvas.style.width = `${W}px`;
+  canvas.style.height = `${H}px`;
   const ctx = canvas.getContext('2d')!;
+  ctx.scale(dpr, dpr);
 
-  // Drop shadow
   ctx.shadowColor = 'rgba(0,0,0,0.6)';
   ctx.shadowBlur = 6;
   ctx.shadowOffsetY = 2;
 
-  // Pin body
   ctx.beginPath();
   ctx.arc(20, 18, 14, 0, Math.PI * 2);
   ctx.fillStyle = color;
   ctx.fill();
 
-  // Pin tail
   ctx.beginPath();
   ctx.moveTo(12, 28);
   ctx.lineTo(20, 52);
@@ -549,14 +558,12 @@ function createPinCanvas(color: string, label: string, bgColor: string): HTMLCan
   ctx.fillStyle = color;
   ctx.fill();
 
-  // Inner circle
   ctx.shadowBlur = 0;
   ctx.beginPath();
   ctx.arc(20, 18, 8, 0, Math.PI * 2);
   ctx.fillStyle = bgColor;
   ctx.fill();
 
-  // Label initial
   if (label) {
     ctx.fillStyle = color;
     ctx.font = 'bold 9px Inter, sans-serif';
@@ -570,11 +577,15 @@ function createPinCanvas(color: string, label: string, bgColor: string): HTMLCan
 
 // Create a canvas with an emoji for POI billboards
 function createEmojiCanvas(emoji: string): HTMLCanvasElement {
-  const size = 32;
+  const dpr = window.devicePixelRatio || 1;
+  const size = 40;
   const canvas = document.createElement('canvas');
-  canvas.width = size;
-  canvas.height = size;
+  canvas.width = size * dpr;
+  canvas.height = size * dpr;
+  canvas.style.width = `${size}px`;
+  canvas.style.height = `${size}px`;
   const ctx = canvas.getContext('2d')!;
+  ctx.scale(dpr, dpr);
   ctx.font = `${size * 0.75}px serif`;
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
