@@ -1,5 +1,6 @@
 // Layer IDs for the 3D explorer
 export type LayerId =
+  | 'buildings3d'
   | 'amenities'
   | 'schools'
   | 'transport'
@@ -18,6 +19,7 @@ export interface ExplorerLayer {
 }
 
 export const DEFAULT_LAYERS: ExplorerLayer[] = [
+  { id: 'buildings3d', label: '3D Buildings', icon: '🏙️', enabled: true, color: '#8B5CF6' },
   { id: 'commute_arcs', label: 'Commute Routes', icon: '🚇', enabled: true, color: '#00D9FF' },
   { id: 'distance_rings', label: 'Distance Rings', icon: '⭕', enabled: true, color: '#FFD700' },
   { id: 'flood', label: 'Flood Risk', icon: '💧', enabled: true, color: '#3B82F6' },
