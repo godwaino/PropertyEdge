@@ -400,6 +400,7 @@ export function CesiumViewer({
           fullscreenButton: false,
           infoBox: false,
           selectionIndicator: false,
+          creditContainer: document.createElement('div'),
         };
 
         if (ionToken) {
@@ -570,7 +571,6 @@ export function CesiumViewer({
           <div className="text-center">
             <div className="w-10 h-10 rounded-full border-2 border-t-cyan border-navy-border animate-spin mx-auto mb-3" />
             <p className="text-sm text-navy-300">Loading 3D explorer…</p>
-            <p className="text-xs text-navy-300/60 mt-1">Powered by CesiumJS</p>
           </div>
         </div>
       )}
@@ -618,13 +618,6 @@ export function CesiumViewer({
               <Maximize2 size={16} />
             </button>
           )}
-        </div>
-      )}
-
-      {/* Cesium attribution */}
-      {cesiumReady && (
-        <div className="absolute bottom-2 left-2 text-[10px] text-navy-300/40 pointer-events-none">
-          Powered by CesiumJS
         </div>
       )}
 
