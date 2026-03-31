@@ -8,6 +8,7 @@ import type { ExplorerLayer, LayerId, PropertyMarker, CommuteDestination } from 
 // Cesium is loaded dynamically to keep the initial bundle small
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type CesiumType = typeof import('cesium');
+type CesiumTilesetRef = { show: boolean; style?: unknown } | null;
 
 // Overpass API endpoint for POI lookups
 const OVERPASS_URL = 'https://overpass-api.de/api/interpreter';
@@ -54,7 +55,7 @@ export function CesiumViewer({
   // Track entities added per layer so we can remove them when toggled off
   const poiEntitiesRef = useRef<Map<LayerId, string[]>>(new Map());
   const fetchingRef = useRef<Set<LayerId>>(new Set());
-  const buildingsTilesetRef = useRef<{ show: boolean } | null>(null);
+  const buildingsTilesetRef = useRef<CesiumTilesetRef>(null);
 
   const removeLayerEntities = useCallback((layerId: LayerId) => {
     const viewer = viewerRef.current;
@@ -105,6 +106,128 @@ export function CesiumViewer({
       poiEntitiesRef.current.set('crime', ids);
     } else if (!layerState('crime') && hasEntities('crime')) {
       removeLayerEntities('crime');
+    }
+
+    // ── Flood zone ──────────────────────────────────────────────────────────
+    if (layerState('flood') && (floodHighRisk || floodMediumRisk) && !hasEntities('flood')) {
+      const color = floodHighRisk
+        ? Cesium.Color.fromCssColorString('#FF4444').withAlpha(0.3)
+        : Cesium.Color.fromCssColorString('#3B82F6').withAlpha(0.2);
+      const id = 'flood-zone';
+      viewer.entities.add({
+        id,
+        position: Cesium.Cartesian3.fromDegrees(property.lng, property.lat),
+        ellipse: {
+          semiMajorAxis: 250,
+          semiMinorAxis: 250,
+          material: color,
+          outline: true,
+          outlineColor: floodHighRisk
+            ? Cesium.Color.fromCssColorString('#FF4444').withAlpha(0.7)
+            : Cesium.Color.fromCssColorString('#3B82F6').withAlpha(0.5),
+          outlineWidth: 2,
+          heightReference: Cesium.HeightReference.CLAMP_TO_GROUND,
+        },
+      });
+      poiEntitiesRef.current.set('flood', [id]);
+    } else if ((!layerState('flood') || (!floodHighRisk && !floodMediumRisk)) && hasEntities('flood')) {
+      removeLayerEntities('flood');
+    }
+
+    // ── Distance rings (native Cesium, not only overlay) ───────────────────
+    if (layerState('distance_rings') && !hasEntities('distance_rings')) {
+      const ids: string[] = [];
+      [250, 500, 1000].forEach((radius) => {
+        const ringId = `distance-ring-${radius}`;
+        viewer.entities.add({
+          id: ringId,
+          position: Cesium.Cartesian3.fromDegrees(property.lng, property.lat),
+          ellipse: {
+            semiMajorAxis: radius,
+            semiMinorAxis: radius,
+            material: Cesium.Color.fromCssColorString('#FFD700').withAlpha(0.05),
+            outline: true,
+            outlineColor: Cesium.Color.fromCssColorString('#FFD700').withAlpha(0.45),
+            outlineWidth: 1,
+            heightReference: Cesium.HeightReference.CLAMP_TO_GROUND,
+          },
+        });
+        ids.push(ringId);
+
+        const labelId = `distance-ring-label-${radius}`;
+        viewer.entities.add({
+          id: labelId,
+          position: Cesium.Cartesian3.fromDegrees(property.lng + (radius / 111320), property.lat, 2),
+          label: {
+            text: `${(radius / 1000).toFixed(radius >= 1000 ? 0 : 1)} km`,
+            font: '10px Inter',
+            fillColor: Cesium.Color.fromCssColorString('#FFD700'),
+            outlineColor: Cesium.Color.fromCssColorString('#080e1a'),
+            outlineWidth: 2,
+            style: Cesium.LabelStyle.FILL_AND_OUTLINE,
+            heightReference: Cesium.HeightReference.RELATIVE_TO_GROUND,
+            disableDepthTestDistance: Number.POSITIVE_INFINITY,
+          },
+        });
+        ids.push(labelId);
+      });
+      poiEntitiesRef.current.set('distance_rings', ids);
+    } else if (!layerState('distance_rings') && hasEntities('distance_rings')) {
+      removeLayerEntities('distance_rings');
+    }
+
+    // ── Commute arcs in Cesium for true 3D route context ───────────────────
+    if (layerState('commute_arcs') && destinations.length > 0 && !hasEntities('commute_arcs')) {
+      const ids: string[] = [];
+      destinations.slice(0, 12).forEach((dest, idx) => {
+        const midLat = (property.lat + dest.lat) / 2;
+        const midLng = (property.lng + dest.lng) / 2;
+        const lift = Math.min(180, 40 + idx * 8);
+        const arcId = `commute-arc-${idx}`;
+        viewer.entities.add({
+          id: arcId,
+          polyline: {
+            positions: Cesium.Cartesian3.fromDegreesArrayHeights([
+              property.lng, property.lat, 6,
+              midLng, midLat, lift,
+              dest.lng, dest.lat, 6,
+            ]),
+            width: 2,
+            material: Cesium.Color.fromCssColorString('#00D9FF').withAlpha(0.75),
+            clampToGround: false,
+          },
+        });
+        ids.push(arcId);
+
+        const stopId = `commute-stop-${idx}`;
+        viewer.entities.add({
+          id: stopId,
+          position: Cesium.Cartesian3.fromDegrees(dest.lng, dest.lat, 2),
+          point: {
+            pixelSize: 6,
+            color: Cesium.Color.fromCssColorString('#00D9FF'),
+            outlineColor: Cesium.Color.fromCssColorString('#080e1a'),
+            outlineWidth: 1,
+            heightReference: Cesium.HeightReference.RELATIVE_TO_GROUND,
+          },
+          label: {
+            text: `${dest.label} · ${dest.durationMins}m`,
+            font: '10px Inter',
+            fillColor: Cesium.Color.WHITE,
+            outlineColor: Cesium.Color.fromCssColorString('#080e1a'),
+            outlineWidth: 2,
+            style: Cesium.LabelStyle.FILL_AND_OUTLINE,
+            verticalOrigin: Cesium.VerticalOrigin.TOP,
+            pixelOffset: new Cesium.Cartesian2(0, -14),
+            heightReference: Cesium.HeightReference.RELATIVE_TO_GROUND,
+            translucencyByDistance: new Cesium.NearFarScalar(200, 1, 1600, 0),
+          },
+        });
+        ids.push(stopId);
+      });
+      poiEntitiesRef.current.set('commute_arcs', ids);
+    } else if ((!layerState('commute_arcs') || destinations.length === 0) && hasEntities('commute_arcs')) {
+      removeLayerEntities('commute_arcs');
     }
 
     // ── Amenities ───────────────────────────────────────────────────────────
@@ -220,7 +343,7 @@ export function CesiumViewer({
     if (buildingsTilesetRef.current) {
       buildingsTilesetRef.current.show = layerState('buildings3d');
     }
-  }, [layers, cesiumReady, property.lat, property.lng, crimeScore, removeLayerEntities]);
+  }, [layers, cesiumReady, property.lat, property.lng, crimeScore, floodHighRisk, floodMediumRisk, destinations, removeLayerEntities]);
 
   // Project geo coordinates to screen space (used by Three.js overlay)
   const projectToScreen = useCallback((lat: number, lng: number): ScreenPos | null => {
@@ -277,7 +400,6 @@ export function CesiumViewer({
           fullscreenButton: false,
           infoBox: false,
           selectionIndicator: false,
-          creditContainer: document.createElement('div'), // hide credits
         };
 
         if (ionToken) {
@@ -310,12 +432,24 @@ export function CesiumViewer({
         viewer.scene.globe.enableLighting = true;
         viewer.shadows = true;
         viewer.scene.shadowMap.enabled = true;
+        viewer.scene.globe.maximumScreenSpaceError = 1.5;
 
         // Add global OSM 3D buildings for spatial context
         // Works without an ion token and gives immediate neighborhood massing context.
         try {
           const buildingsTileset = await Cesium.createOsmBuildingsAsync();
           buildingsTileset.show = true;
+          if ('Cesium3DTileStyle' in Cesium) {
+            buildingsTileset.style = new Cesium.Cesium3DTileStyle({
+              color: {
+                conditions: [
+                  ['${height} >= 80', 'color("#9F7AEA", 0.85)'],
+                  ['${height} >= 40', 'color("#7C3AED", 0.75)'],
+                  ['true', 'color("#4C1D95", 0.55)'],
+                ],
+              },
+            });
+          }
           viewer.scene.primitives.add(buildingsTileset);
           buildingsTilesetRef.current = buildingsTileset;
         } catch (tilesErr) {
@@ -347,28 +481,6 @@ export function CesiumViewer({
             disableDepthTestDistance: Number.POSITIVE_INFINITY,
           },
         });
-
-        // Flood zone indicator (visual ring at property if high/medium risk)
-        if (floodHighRisk || floodMediumRisk) {
-          const color = floodHighRisk
-            ? Cesium.Color.fromCssColorString('#FF4444').withAlpha(0.3)
-            : Cesium.Color.fromCssColorString('#3B82F6').withAlpha(0.2);
-          viewer.entities.add({
-            id: 'flood-zone',
-            position: Cesium.Cartesian3.fromDegrees(property.lng, property.lat),
-            ellipse: {
-              semiMajorAxis: 250,
-              semiMinorAxis: 250,
-              material: color,
-              outline: true,
-              outlineColor: floodHighRisk
-                ? Cesium.Color.fromCssColorString('#FF4444').withAlpha(0.7)
-                : Cesium.Color.fromCssColorString('#3B82F6').withAlpha(0.5),
-              outlineWidth: 2,
-              heightReference: Cesium.HeightReference.CLAMP_TO_GROUND,
-            },
-          });
-        }
 
         // Fly to property with cinematic arrival
         viewer.camera.flyTo({
