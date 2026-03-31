@@ -441,13 +441,7 @@ export function CesiumViewer({
           buildingsTileset.show = true;
           if ('Cesium3DTileStyle' in Cesium) {
             buildingsTileset.style = new Cesium.Cesium3DTileStyle({
-              color: {
-                conditions: [
-                  ['${height} >= 80', 'color("#9F7AEA", 0.85)'],
-                  ['${height} >= 40', 'color("#7C3AED", 0.75)'],
-                  ['true', 'color("#4C1D95", 0.55)'],
-                ],
-              },
+              color: 'color("#7C3AED", 0.65)',
             });
           }
           viewer.scene.primitives.add(buildingsTileset);
