@@ -51,7 +51,7 @@ const STEPS = [
   {
     n: '01',
     title: 'Paste a listing',
-    body: 'Start with a property URL from Rightmove, Zoopla, or OnTheMarket — or fill in the details yourself.',
+    body: 'Start with a property URL from Rightmove, Zoopla, or OnTheMarket - or fill in the details yourself.',
   },
   {
     n: '02',
@@ -114,8 +114,8 @@ export function LandingPage() {
             </div>
 
             <h1 className="text-4xl sm:text-[2.75rem] font-extrabold text-charcoal leading-tight mb-5">
-              Know if it's worth it —{' '}
-              <span className="text-cyan">and right for your life.</span>
+              Know if it's worth it -{' '}
+              <span className="text-cyan">and right for you.</span>
             </h1>
 
             <p className="text-base text-navy-300 leading-relaxed mb-8 max-w-md">
@@ -194,7 +194,7 @@ export function LandingPage() {
             { value: 'Value',        label: 'Is it priced right?' },
             { value: 'Neighbourhood',label: 'Is the area right?' },
             { value: 'Risks',        label: 'What should I check?' },
-            { value: 'Fit',          label: 'Is it right for my life?' },
+            { value: 'Fit',          label: 'Is it right for me?' },
           ].map(({ value, label }) => (
             <div key={value} className="border-r border-white/10 last:border-0 pr-8 last:pr-0">
               <p className="text-xl font-extrabold text-cyan mb-1">{value}</p>
@@ -276,7 +276,7 @@ export function LandingPage() {
             Less guesswork. Better decisions.
           </h2>
           <p className="text-white/60 text-base mb-8 max-w-xl mx-auto leading-relaxed">
-            PropertyEdge helps you spend less time piecing together portals, maps, and scattered research — and more time focusing on homes actually worth pursuing.
+            PropertyEdge helps you spend less time piecing together portals, maps, and scattered research - and more time focusing on homes actually worth pursuing.
           </p>
           <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
             <Link
