@@ -77,7 +77,13 @@ export function AnalysePage() {
       setImportedFields(newImported);
       setShowManual(true);
     } catch (e) {
-      setUrlError('Could not parse that URL. Please fill in the details manually.');
+      const msg = e instanceof Error ? e.message : String(e);
+      const isBlocked = msg.toLowerCase().includes('403') || msg.toLowerCase().includes('blocking');
+      setUrlError(
+        isBlocked
+          ? 'The listing site blocked automatic import. Please fill in the details manually.'
+          : `Could not import listing: ${msg}. Please fill in the details manually.`,
+      );
       setShowManual(true);
     } finally {
       setUrlLoading(false);
