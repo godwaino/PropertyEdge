@@ -1139,18 +1139,21 @@ app.post('/api/parse-listing', async (req, res) => {
   // Strip fragment — fragments are client-side only and confuse server fetch
   const fetchUrl = `${parsedUrl.origin}${parsedUrl.pathname}${parsedUrl.search}`;
 
-  const browserHeaders = {
+  const isZoopla = hostname === 'zoopla.co.uk';
+  const browserHeaders: Record<string, string> = {
     'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
     'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
     'Accept-Language': 'en-GB,en-US;q=0.9,en;q=0.8',
     'Accept-Encoding': 'gzip, deflate, br',
     'Cache-Control': 'no-cache',
     'Pragma': 'no-cache',
+    'Connection': 'keep-alive',
     'Sec-Fetch-Dest': 'document',
     'Sec-Fetch-Mode': 'navigate',
     'Sec-Fetch-Site': 'none',
     'Sec-Fetch-User': '?1',
     'Upgrade-Insecure-Requests': '1',
+    ...(isZoopla && { 'Referer': 'https://www.zoopla.co.uk/for-sale/property/london/' }),
   };
 
   let html: string;
@@ -1175,18 +1178,38 @@ app.post('/api/parse-listing', async (req, res) => {
     // Rightmove Next.js shape
     const rmProp = props?.propertyData ?? props?.property ?? props?.listing?.property;
     if (rmProp) applyRmPropertyData(rmProp, out);
-    // Zoopla Next.js shape
-    const zoopListing = props?.listingDetails ?? props?.listing;
+    // Zoopla Next.js shape — try multiple known key paths
+    const zoopListing =
+      props?.listingDetails ??
+      props?.listing ??
+      props?.propertyDetails ??
+      nextData?.query?.listingDetails ??
+      null;
     if (zoopListing && !out.askingPrice) {
-      const price = zoopListing.price?.amount ?? zoopListing.pricing?.price ?? zoopListing.askingPrice;
+      const price =
+        zoopListing.price?.amount ??
+        zoopListing.pricing?.price ??
+        zoopListing.askingPrice ??
+        zoopListing.displayPrice;
       if (price) out.askingPrice = parseInt(String(price).replace(/[^0-9]/g, ''), 10);
-      if (zoopListing.address?.displayAddress && !out.address) out.address = zoopListing.address.displayAddress;
-      if (zoopListing.address?.postcode && !out.postcode) out.postcode = zoopListing.address.postcode;
+      if (!out.address) {
+        out.address =
+          zoopListing.address?.displayAddress ??
+          zoopListing.displayAddress ??
+          zoopListing.address?.label ??
+          undefined;
+      }
+      if (!out.postcode) {
+        out.postcode =
+          zoopListing.address?.postcode ??
+          zoopListing.postcode ??
+          undefined;
+      }
       const beds = zoopListing.numBedrooms ?? zoopListing.bedrooms ?? zoopListing.details?.numBedrooms;
       if (beds && !out.bedrooms) out.bedrooms = parseInt(String(beds), 10);
-      const tenure = zoopListing.details?.tenure ?? zoopListing.tenure ?? '';
+      const tenure = zoopListing.details?.tenure ?? zoopListing.tenure ?? zoopListing.tenureType ?? '';
       if (tenure && !out.tenure) out.tenure = tenure.toLowerCase().includes('lease') ? 'leasehold' : 'freehold';
-      const area = zoopListing.details?.floorArea ?? zoopListing.floorArea;
+      const area = zoopListing.details?.floorArea ?? zoopListing.floorArea ?? zoopListing.totalFloorArea;
       if (area?.value && !out.sizeSqm) {
         out.sizeSqm = (area.units === 'sqm' || area.unitCode === 'MTK')
           ? Math.round(area.value)
